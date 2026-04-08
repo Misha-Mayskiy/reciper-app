@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  api:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://reciper:password@db:5432/reciperdb
+      - REDIS_URL=redis://redis:6379/0
+      - UNSPLASH_ACCESS_KEY=gEWq0-8uhGgXAiJTeLIpiXtFz7uGdsvoRMDANBrwPbU
+    depends_on:
+      db:
+        condition: service_started
+      redis:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+
+  redis:
+    image: "redis:alpine"
+    ports:
+      - "6379:6379"
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: reciper
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: reciperdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
