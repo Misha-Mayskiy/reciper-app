@@ -27,7 +27,12 @@ class ScannerRepository {
   Future<TaskResponse> checkTaskStatus(String taskId) async {
     try {
       final response = await dio.get('/tasks/$taskId');
-      return TaskResponse.fromJson(response.data);
+      final data = response.data;
+      if (data != null && data['result'] != null) {
+        data['ingredients'] = data['result']['ingredients'];
+        data['recipes'] = data['result']['recipes'];
+      }
+      return TaskResponse.fromJson(data);
     } catch (e) {
       throw Exception('Failed to check task status: $e');
     }

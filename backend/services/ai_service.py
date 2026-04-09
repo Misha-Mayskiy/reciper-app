@@ -1,8 +1,7 @@
 import asyncio
-from typing import List
 from infrastructure.external_api.unsplash import fetch_recipe_image
 from services.task_service import TaskService
-import uuid
+
 
 class AIService:
     def __init__(self, task_service: TaskService):
@@ -15,7 +14,7 @@ class AIService:
         try:
             # 1. Меняем статус на processing (хотя он уже установлен роутером, но подтверждаем)
             self.task_service.set_task_status(task_id, "processing")
-            
+
             # 2. Эмуляция долгой работы AI (3-5 секунд поллинга)
             await asyncio.sleep(4)
 
@@ -32,8 +31,10 @@ class AIService:
                     "fat": 25,
                     "carbs": 5,
                     "steps": [
-                        {"step_number": 1, "instruction": "Chop tomatoes and onions.", "timer_seconds": 120},
-                        {"step_number": 2, "instruction": "Whisk eggs and fry.", "timer_seconds": 300}
+                        {"step_number": 1, "instruction": "Chop tomatoes and onions.",
+                            "timer_seconds": 120},
+                        {"step_number": 2, "instruction": "Whisk eggs and fry.",
+                            "timer_seconds": 300}
                     ]
                 },
                 {
@@ -46,18 +47,36 @@ class AIService:
                     "fat": 10,
                     "carbs": 15,
                     "steps": [
-                        {"step_number": 1, "instruction": "Mix everything.", "timer_seconds": None}
+                        {"step_number": 1, "instruction": "Mix everything.",
+                            "timer_seconds": None}
                     ]
                 }
             ]
 
             # 4. Получаем картинки из Unsplash для каждого рецепта
-            for recipe in recipes_data:
-                image_url = await fetch_recipe_image(recipe["search_query"])
-                recipe["image_url"] = image_url
-                # Присваиваем фейковые ID, так как мы пока не сохраняем в БД при генерации (רק при выборе)
-                recipe["id"] = str(uuid.uuid4())
-                del recipe["search_query"]
+            from infrastructure.database import SessionLocal
+            from infrastructure.repositories import RecipeRepository
+            with SessionLocal() as db:
+                recipe_repo = RecipeRepository(db)
+                for recipe in recipes_data:
+                    image_url = await fetch_recipe_image(recipe["search_query"])
+                    recipe["image_url"] = image_url
+                    del recipe["search_query"]
+
+                    # Создаем запись в БД без явного ID (он сгенерируется внутри)
+                    new_recipe_orm = recipe_repo.create_recipe({
+                        "title": recipe["title"],
+                        "description": recipe["description"],
+                        "prep_time_minutes": recipe["prep_time_minutes"],
+                        "calories": recipe["calories"],
+                        "protein": recipe["protein"],
+                        "fat": recipe["fat"],
+                        "carbs": recipe["carbs"],
+                        "image_url": recipe["image_url"]
+                    })
+
+                    # Теперь присваиваем сгенерированный ID в ответ клиенту
+                    recipe["id"] = new_recipe_orm.id
 
             # 5. Сохраняем финальный результат
             result = {
@@ -68,4 +87,5 @@ class AIService:
 
         except Exception as e:
             print(f"Error in AI task {task_id}: {e}")
-            self.task_service.set_task_status(task_id, "error", {"detail": str(e)})
+            self.task_service.set_task_status(
+                task_id, "error", {"detail": str(e)})

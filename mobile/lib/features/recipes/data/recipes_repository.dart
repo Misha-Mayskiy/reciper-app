@@ -12,7 +12,7 @@ class RecipesRepository {
 
   Future<void> consumeRecipe(String recipeId) async {
     try {
-      await dio.post('/meals/consume', data: {'recipe_id': recipeId});
+      await dio.post('/meals/consume', data: {'recipe_id': recipeId, 'user_id': 'user_1'});
     } catch (e) {
       throw Exception('Failed to record consumption: $e');
     }

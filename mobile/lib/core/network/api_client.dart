@@ -7,14 +7,13 @@ part 'api_client.g.dart';
 
 @Riverpod(keepAlive: true)
 Dio apiClient(ApiClientRef ref) {
-  // Use localhost alias for Android emulator or standard localhost for others
-  final String baseUrl = !kIsWeb && Platform.isAndroid 
-      ? 'http://10.0.2.2:8000/api/v1' 
-      : 'http://localhost:8000/api/v1';
+  // Мы используем localhost (127.0.0.1) вместе с технологией ADB Reverse Tunneling.
+  // Это полностью обходит все блокировки Windows Firewall.
+  final String baseUrl = 'http://127.0.0.1:8000/api/v1';
 
   final dio = Dio(BaseOptions(
     baseUrl: baseUrl,
-    connectTimeout: const Duration(seconds: 30),
+    connectTimeout: const Duration(seconds: 10),
     receiveTimeout: const Duration(seconds: 30),
     headers: {
       'Content-Type': 'application/json',

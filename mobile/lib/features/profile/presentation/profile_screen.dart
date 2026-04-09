@@ -30,38 +30,48 @@ class ProfileScreen extends ConsumerWidget {
               children: [
                 const Text('Макронутриенты сегодня', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 16),
-                SizedBox(
-                  height: 200,
-                  child: PieChart(
-                    PieChartData(
-                      sectionsSpace: 4,
-                      centerSpaceRadius: 40,
-                      sections: [
-                        PieChartSectionData(
-                          color: Colors.redAccent,
-                          value: todayStat.totalProtein.toDouble(),
-                          title: 'Белки',
-                          radius: 50,
-                          titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
-                        ),
-                        PieChartSectionData(
-                          color: Colors.yellowAccent.shade700,
-                          value: todayStat.totalFat.toDouble(),
-                          title: 'Жиры',
-                          radius: 50,
-                          titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
-                        ),
-                        PieChartSectionData(
-                          color: Colors.greenAccent,
-                          value: todayStat.totalCarbs.toDouble(),
-                          title: 'Углеводы',
-                          radius: 50,
-                          titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
-                        ),
-                      ],
+                if (todayStat.totalProtein == 0 && todayStat.totalFat == 0 && todayStat.totalCarbs == 0)
+                  Container(
+                    height: 200,
+                    alignment: Alignment.center,
+                    child: const Text(
+                      'Вы еще ничего не ели сегодня 🍏', 
+                      style: TextStyle(color: Colors.grey, fontSize: 16)
+                    ),
+                  )
+                else
+                  SizedBox(
+                    height: 200,
+                    child: PieChart(
+                      PieChartData(
+                        sectionsSpace: 4,
+                        centerSpaceRadius: 40,
+                        sections: [
+                          PieChartSectionData(
+                            color: Colors.redAccent,
+                            value: todayStat.totalProtein.toDouble(),
+                            title: 'Белки',
+                            radius: 50,
+                            titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
+                          PieChartSectionData(
+                            color: Colors.yellowAccent.shade700,
+                            value: todayStat.totalFat.toDouble(),
+                            title: 'Жиры',
+                            radius: 50,
+                            titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
+                          PieChartSectionData(
+                            color: Colors.greenAccent,
+                            value: todayStat.totalCarbs.toDouble(),
+                            title: 'Углеводы',
+                            radius: 50,
+                            titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
                 const SizedBox(height: 32),
                 const Text('Калории за неделю', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 16),
