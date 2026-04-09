@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../core/domain/models/recipe.dart';
 import '../../../core/domain/models/recipe_step.dart';
+import '../../../core/theme/app_theme.dart';
 import '../data/recipes_repository.dart';
 
 class CookingModeScreen extends ConsumerStatefulWidget {
@@ -16,129 +20,315 @@ class CookingModeScreen extends ConsumerStatefulWidget {
 
 class _CookingModeScreenState extends ConsumerState<CookingModeScreen> {
   final PageController _pageController = PageController();
-  // We'll mock the recipe steps here since it might come from backend differently,
-  // or we assume it's loaded with the recipe. For demo, we just extract.
-  // Actually, Recipe model lacks 'steps' property in spec, let's create dynamic mocked steps or assume backend handles it.
-  // If Recipe model lacks it, we will just use dummy data for presentation.
-  List<RecipeStep> get steps {
-    // In real scenario, would be fetched from API or included in Recipe object.
-    return [
-      RecipeStep(id: '1', recipeId: widget.recipe.id, stepNumber: 1, instruction: 'Подготовьте ингредиенты. Нарежьте овощи.', timerSeconds: null),
-      RecipeStep(id: '2', recipeId: widget.recipe.id, stepNumber: 2, instruction: 'Обжарьте на сковороде в течение 3 минут.', timerSeconds: 180),
-      RecipeStep(id: '3', recipeId: widget.recipe.id, stepNumber: 3, instruction: 'Добавьте специи и тушите до готовности.', timerSeconds: 300),
-      RecipeStep(id: '4', recipeId: widget.recipe.id, stepNumber: 4, instruction: 'Блюдо готово, снимайте с огня.', timerSeconds: null),
-    ];
-  }
-
   int _currentStepIndex = 0;
   bool _isConsuming = false;
 
+  List<RecipeStep> get steps {
+    // Используем реальные шаги из рецепта, если они есть
+    if (widget.recipe.steps.isNotEmpty) {
+      return widget.recipe.steps;
+    }
+    // Fallback на дефолтные шаги
+    return [
+      RecipeStep(
+        id: '1', recipeId: widget.recipe.id, stepNumber: 1,
+        instruction: 'Подготовьте все ингредиенты для блюда «${widget.recipe.title}».',
+        timerSeconds: null,
+      ),
+      RecipeStep(
+        id: '2', recipeId: widget.recipe.id, stepNumber: 2,
+        instruction: 'Следуйте рецепту и приготовьте блюдо.',
+        timerSeconds: null,
+      ),
+      RecipeStep(
+        id: '3', recipeId: widget.recipe.id, stepNumber: 3,
+        instruction: 'Блюдо готово! Приятного аппетита!',
+        timerSeconds: null,
+      ),
+    ];
+  }
+
   void _finishCooking() async {
+    // Haptic feedback
+    HapticFeedback.heavyImpact();
     setState(() => _isConsuming = true);
     try {
       await ref.read(recipesRepositoryProvider).consumeRecipe(widget.recipe.id);
       if (!mounted) return;
-      context.go('/'); // Back to profile stats
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Приятного аппетита! Данные сохранены.')));
+      _showSuccessDialog();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка: $e')),
+      );
     } finally {
-      if (mounted) {
-        setState(() => _isConsuming = false);
-      }
+      if (mounted) setState(() => _isConsuming = false);
     }
+  }
+
+  void _showSuccessDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        backgroundColor: AppTheme.surfaceCard,
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 80, height: 80,
+                decoration: BoxDecoration(
+                  gradient: AppTheme.primaryGradient,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.check_rounded, size: 40, color: Colors.black),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Приятного аппетита! 🎉',
+                style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Данные о питании сохранены\nв вашу статистику',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(fontSize: 14, color: AppTheme.textSecondary),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    context.go('/');
+                  },
+                  child: const Text('К статистике'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Режим готовки')),
-      body: PageView.builder(
-        controller: _pageController,
-        itemCount: steps.length,
-        onPageChanged: (idx) => setState(() => _currentStepIndex = idx),
-        itemBuilder: (context, index) {
-          final step = steps[index];
-          return Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text('Шаг ${step.stepNumber}', style: const TextStyle(fontSize: 24, color: Colors.greenAccent)),
-                const SizedBox(height: 32),
-                Text(
-                  step.instruction,
-                  style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center,
+      backgroundColor: AppTheme.background,
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.close_rounded),
+          onPressed: () => context.go('/'),
+        ),
+        title: Text(
+          widget.recipe.title,
+          style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                const SizedBox(height: 48),
-                if (step.timerSeconds != null)
-                  _TimerWidget(seconds: step.timerSeconds!),
-                if (index == steps.length - 1) ...[
-                  const SizedBox(height: 64),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 60,
-                    child: ElevatedButton(
-                      onPressed: _isConsuming ? null : _finishCooking,
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.greenAccent, foregroundColor: Colors.black),
-                      child: _isConsuming 
-                          ? const CircularProgressIndicator() 
-                          : const Text('Приятного аппетита!', style: TextStyle(fontSize: 20)),
-                    ),
-                  )
-                ]
-              ],
-            ),
-          );
-        },
-      ),
-      bottomNavigationBar: SafeArea(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            TextButton(
-              onPressed: _currentStepIndex > 0 
-                  ? () => _pageController.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut) 
-                  : null,
-              child: const Text('Назад'),
-            ),
-            Row(
-              children: List.generate(
-                steps.length, 
-                (index) => Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  width: 10, height: 10,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: index == _currentStepIndex ? Colors.greenAccent : Colors.grey,
-                  ),
-                )
+                child: Text(
+                  '${_currentStepIndex + 1} / ${steps.length}',
+                  style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.primary),
+                ),
               ),
             ),
-            TextButton(
-              onPressed: _currentStepIndex < steps.length - 1 
-                  ? () => _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut) 
-                  : null,
-              child: const Text('Вперед'),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // ──── Progress bar
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: ((_currentStepIndex + 1) / steps.length),
+                backgroundColor: Colors.white.withOpacity(0.06),
+                valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primary),
+                minHeight: 4,
+              ),
             ),
-          ],
-        ),
+          ),
+
+          // ──── Steps PageView
+          Expanded(
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: steps.length,
+              onPageChanged: (idx) {
+                HapticFeedback.selectionClick();
+                setState(() => _currentStepIndex = idx);
+              },
+              itemBuilder: (context, index) {
+                final step = steps[index];
+                final isLast = index == steps.length - 1;
+
+                return Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Step number badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          gradient: AppTheme.primaryGradient,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          'Шаг ${step.stepNumber}',
+                          style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.black),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+
+                      // Instruction
+                      Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: GlassmorphismDecoration.card(opacity: 0.06),
+                        child: Text(
+                          step.instruction,
+                          style: GoogleFonts.inter(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textPrimary,
+                            height: 1.4,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+
+                      // Timer
+                      if (step.timerSeconds != null)
+                        _GradientTimer(seconds: step.timerSeconds!),
+
+                      // Finish button on last step
+                      if (isLast) ...[
+                        const SizedBox(height: 32),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 56,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: AppTheme.primaryGradient,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppTheme.primary.withOpacity(0.4),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: ElevatedButton.icon(
+                              onPressed: _isConsuming ? null : _finishCooking,
+                              icon: _isConsuming
+                                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                                  : const Icon(Icons.celebration_rounded, size: 22),
+                              label: Text(
+                                'Приятного аппетита!',
+                                style: GoogleFonts.inter(fontSize: 17, fontWeight: FontWeight.w700),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.transparent,
+                                shadowColor: Colors.transparent,
+                                elevation: 0,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+
+          // ──── Bottom navigation
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton.icon(
+                    onPressed: _currentStepIndex > 0
+                        ? () => _pageController.previousPage(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut)
+                        : null,
+                    icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                    label: const Text('Назад'),
+                  ),
+                  // Step indicators
+                  Row(
+                    children: List.generate(
+                      steps.length,
+                      (index) => AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        margin: const EdgeInsets.symmetric(horizontal: 3),
+                        width: index == _currentStepIndex ? 24 : 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(4),
+                          color: index == _currentStepIndex
+                              ? AppTheme.primary
+                              : Colors.white.withOpacity(0.15),
+                        ),
+                      ),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: _currentStepIndex < steps.length - 1
+                        ? () => _pageController.nextPage(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut)
+                        : null,
+                    icon: const Text(''),
+                    label: Row(
+                      children: [
+                        const Text('Далее'),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.arrow_forward_rounded, size: 18),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _TimerWidget extends StatefulWidget {
+/// Кастомный круговой таймер с градиентом
+class _GradientTimer extends StatefulWidget {
   final int seconds;
-  const _TimerWidget({required this.seconds});
+  const _GradientTimer({required this.seconds});
 
   @override
-  State<_TimerWidget> createState() => _TimerWidgetState();
+  State<_GradientTimer> createState() => _GradientTimerState();
 }
 
-class _TimerWidgetState extends State<_TimerWidget> {
+class _GradientTimerState extends State<_GradientTimer>
+    with SingleTickerProviderStateMixin {
   late int _timeLeft;
   Timer? _timer;
   bool _isRunning = false;
@@ -150,6 +340,7 @@ class _TimerWidgetState extends State<_TimerWidget> {
   }
 
   void _toggleTimer() {
+    HapticFeedback.mediumImpact();
     if (_isRunning) {
       _timer?.cancel();
     } else {
@@ -159,10 +350,19 @@ class _TimerWidgetState extends State<_TimerWidget> {
         } else {
           timer.cancel();
           setState(() => _isRunning = false);
+          HapticFeedback.heavyImpact();
         }
       });
     }
     setState(() => _isRunning = !_isRunning);
+  }
+
+  void _resetTimer() {
+    _timer?.cancel();
+    setState(() {
+      _timeLeft = widget.seconds;
+      _isRunning = false;
+    });
   }
 
   @override
@@ -175,29 +375,80 @@ class _TimerWidgetState extends State<_TimerWidget> {
   Widget build(BuildContext context) {
     final minutes = (_timeLeft / 60).floor();
     final seconds = _timeLeft % 60;
-    return GestureDetector(
-      onTap: _toggleTimer,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          SizedBox(
-            width: 150, height: 150,
-            child: CircularProgressIndicator(
-              value: _timeLeft / widget.seconds,
-              strokeWidth: 8,
-              backgroundColor: Colors.grey.shade800,
-              color: Colors.greenAccent,
+    final progress = _timeLeft / widget.seconds;
+
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: _toggleTimer,
+          onLongPress: _resetTimer,
+          child: SizedBox(
+            width: 160,
+            height: 160,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Background ring
+                SizedBox(
+                  width: 150, height: 150,
+                  child: CircularProgressIndicator(
+                    value: 1,
+                    strokeWidth: 8,
+                    backgroundColor: Colors.transparent,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white.withOpacity(0.06)),
+                  ),
+                ),
+                // Progress ring
+                SizedBox(
+                  width: 150, height: 150,
+                  child: CircularProgressIndicator(
+                    value: progress,
+                    strokeWidth: 8,
+                    strokeCap: StrokeCap.round,
+                    backgroundColor: Colors.transparent,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      _timeLeft == 0 ? AppTheme.primary : AppTheme.accentLight,
+                    ),
+                  ),
+                ),
+                // Time display
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}',
+                      style: GoogleFonts.inter(fontSize: 36, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
+                    ),
+                    const SizedBox(height: 4),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 200),
+                      child: Icon(
+                        _timeLeft == 0
+                            ? Icons.check_circle_rounded
+                            : _isRunning
+                                ? Icons.pause_rounded
+                                : Icons.play_arrow_rounded,
+                        key: ValueKey(_isRunning),
+                        size: 28,
+                        color: _timeLeft == 0 ? AppTheme.primary : AppTheme.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
-              Icon(_isRunning ? Icons.pause : Icons.play_arrow, size: 32),
-            ],
-          )
-        ],
-      ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _timeLeft == 0
+              ? 'Готово!'
+              : _isRunning
+                  ? 'Нажмите для паузы'
+                  : 'Нажмите для запуска',
+          style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted),
+        ),
+      ],
     );
   }
 }

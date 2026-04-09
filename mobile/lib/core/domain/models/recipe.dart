@@ -1,4 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'recipe_step.dart';
 
 part 'recipe.freezed.dart';
 part 'recipe.g.dart';
@@ -15,6 +16,7 @@ class Recipe with _$Recipe {
     required int protein,
     required int fat,
     required int carbs,
+    @Default([]) List<RecipeStep> steps,
   }) = _Recipe;
 
   factory Recipe.fromJson(Map<String, dynamic> json) => _$RecipeFromJson(json);

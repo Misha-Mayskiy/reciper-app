@@ -31,6 +31,7 @@ mixin _$Recipe {
   int get protein => throw _privateConstructorUsedError;
   int get fat => throw _privateConstructorUsedError;
   int get carbs => throw _privateConstructorUsedError;
+  List<RecipeStep> get steps => throw _privateConstructorUsedError;
 
   /// Serializes this Recipe to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -55,7 +56,8 @@ abstract class $RecipeCopyWith<$Res> {
       int calories,
       int protein,
       int fat,
-      int carbs});
+      int carbs,
+      List<RecipeStep> steps});
 }
 
 /// @nodoc
@@ -82,6 +84,7 @@ class _$RecipeCopyWithImpl<$Res, $Val extends Recipe>
     Object? protein = null,
     Object? fat = null,
     Object? carbs = null,
+    Object? steps = null,
   }) {
     return _then(_value.copyWith(
       id: null == id
@@ -120,6 +123,10 @@ class _$RecipeCopyWithImpl<$Res, $Val extends Recipe>
           ? _value.carbs
           : carbs // ignore: cast_nullable_to_non_nullable
               as int,
+      steps: null == steps
+          ? _value.steps
+          : steps // ignore: cast_nullable_to_non_nullable
+              as List<RecipeStep>,
     ) as $Val);
   }
 }
@@ -140,7 +147,8 @@ abstract class _$$RecipeImplCopyWith<$Res> implements $RecipeCopyWith<$Res> {
       int calories,
       int protein,
       int fat,
-      int carbs});
+      int carbs,
+      List<RecipeStep> steps});
 }
 
 /// @nodoc
@@ -165,6 +173,7 @@ class __$$RecipeImplCopyWithImpl<$Res>
     Object? protein = null,
     Object? fat = null,
     Object? carbs = null,
+    Object? steps = null,
   }) {
     return _then(_$RecipeImpl(
       id: null == id
@@ -203,6 +212,10 @@ class __$$RecipeImplCopyWithImpl<$Res>
           ? _value.carbs
           : carbs // ignore: cast_nullable_to_non_nullable
               as int,
+      steps: null == steps
+          ? _value._steps
+          : steps // ignore: cast_nullable_to_non_nullable
+              as List<RecipeStep>,
     ));
   }
 }
@@ -219,7 +232,9 @@ class _$RecipeImpl implements _Recipe {
       required this.calories,
       required this.protein,
       required this.fat,
-      required this.carbs});
+      required this.carbs,
+      final List<RecipeStep> steps = const []})
+      : _steps = steps;
 
   factory _$RecipeImpl.fromJson(Map<String, dynamic> json) =>
       _$$RecipeImplFromJson(json);
@@ -244,10 +259,18 @@ class _$RecipeImpl implements _Recipe {
   final int fat;
   @override
   final int carbs;
+  final List<RecipeStep> _steps;
+  @override
+  @JsonKey()
+  List<RecipeStep> get steps {
+    if (_steps is EqualUnmodifiableListView) return _steps;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_steps);
+  }
 
   @override
   String toString() {
-    return 'Recipe(id: $id, title: $title, description: $description, imageUrl: $imageUrl, prepTimeMinutes: $prepTimeMinutes, calories: $calories, protein: $protein, fat: $fat, carbs: $carbs)';
+    return 'Recipe(id: $id, title: $title, description: $description, imageUrl: $imageUrl, prepTimeMinutes: $prepTimeMinutes, calories: $calories, protein: $protein, fat: $fat, carbs: $carbs, steps: $steps)';
   }
 
   @override
@@ -267,13 +290,24 @@ class _$RecipeImpl implements _Recipe {
                 other.calories == calories) &&
             (identical(other.protein, protein) || other.protein == protein) &&
             (identical(other.fat, fat) || other.fat == fat) &&
-            (identical(other.carbs, carbs) || other.carbs == carbs));
+            (identical(other.carbs, carbs) || other.carbs == carbs) &&
+            const DeepCollectionEquality().equals(other._steps, _steps));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(runtimeType, id, title, description, imageUrl,
-      prepTimeMinutes, calories, protein, fat, carbs);
+  int get hashCode => Object.hash(
+      runtimeType,
+      id,
+      title,
+      description,
+      imageUrl,
+      prepTimeMinutes,
+      calories,
+      protein,
+      fat,
+      carbs,
+      const DeepCollectionEquality().hash(_steps));
 
   /// Create a copy of Recipe
   /// with the given fields replaced by the non-null parameter values.
@@ -301,7 +335,8 @@ abstract class _Recipe implements Recipe {
       required final int calories,
       required final int protein,
       required final int fat,
-      required final int carbs}) = _$RecipeImpl;
+      required final int carbs,
+      final List<RecipeStep> steps}) = _$RecipeImpl;
 
   factory _Recipe.fromJson(Map<String, dynamic> json) = _$RecipeImpl.fromJson;
 
@@ -325,6 +360,8 @@ abstract class _Recipe implements Recipe {
   int get fat;
   @override
   int get carbs;
+  @override
+  List<RecipeStep> get steps;
 
   /// Create a copy of Recipe
   /// with the given fields replaced by the non-null parameter values.

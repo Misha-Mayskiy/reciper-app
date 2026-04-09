@@ -16,6 +16,10 @@ _$RecipeImpl _$$RecipeImplFromJson(Map<String, dynamic> json) => _$RecipeImpl(
       protein: (json['protein'] as num).toInt(),
       fat: (json['fat'] as num).toInt(),
       carbs: (json['carbs'] as num).toInt(),
+      steps: (json['steps'] as List<dynamic>?)
+              ?.map((e) => RecipeStep.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
     );
 
 Map<String, dynamic> _$$RecipeImplToJson(_$RecipeImpl instance) =>
@@ -29,4 +33,5 @@ Map<String, dynamic> _$$RecipeImplToJson(_$RecipeImpl instance) =>
       'protein': instance.protein,
       'fat': instance.fat,
       'carbs': instance.carbs,
+      'steps': instance.steps,
     };
