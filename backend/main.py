@@ -3,27 +3,56 @@
 Настраивает CORS, роутеры и startup-события.
 """
 import logging
+import random
+import uuid
 from contextlib import asynccontextmanager
+from datetime import date, timedelta
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.v1.routers import fridge, tasks, meals, users
 from infrastructure.database import SessionLocal
-from infrastructure.repositories import UserRepository
+from infrastructure.orm_models import DailyStatOrm
+from infrastructure.repositories import UserRepository, DailyStatRepository
 
 logger = logging.getLogger("reciper.main")
+
+
+def _seed_history(db, user_id: str):
+    """Создаёт исторические данные за 30 дней для красивого графика."""
+    stat_repo = DailyStatRepository(db)
+    today = date.today()
+
+    for days_ago in range(30, 0, -1):
+        target_date = today - timedelta(days=days_ago)
+        existing = stat_repo.get_stat_by_date(user_id, target_date)
+        if not existing:
+            # Реалистичные вариации: ±30% от дневной нормы
+            base_cal = random.randint(1600, 2800)
+            stat = DailyStatOrm(
+                id=str(uuid.uuid4()),
+                user_id=user_id,
+                date=target_date,
+                total_calories=base_cal,
+                total_protein=random.randint(60, 160),
+                total_fat=random.randint(40, 100),
+                total_carbs=random.randint(150, 350),
+            )
+            db.add(stat)
+
+    db.commit()
+    logger.info(f"📊 Seed: history for {user_id} — 30 days")
 
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     """
     Startup/shutdown lifecycle.
-    При старте создаём дефолтного пользователя если его нет.
+    При старте создаём дефолтного пользователя и seed-историю.
     """
     logger.info("🚀 Reciper API — запуск")
 
-    # Seed: создаём дефолтного пользователя
     with SessionLocal() as db:
         user_repo = UserRepository(db)
         if not user_repo.get_user("user_1"):
@@ -37,6 +66,9 @@ async def lifespan(application: FastAPI):
             logger.info("✅ Создан дефолтный пользователь user_1")
         else:
             logger.info("ℹ️ Дефолтный пользователь user_1 уже существует")
+
+        # Seed historical data
+        _seed_history(db, "user_1")
 
     yield
 

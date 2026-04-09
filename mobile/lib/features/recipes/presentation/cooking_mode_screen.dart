@@ -24,32 +24,20 @@ class _CookingModeScreenState extends ConsumerState<CookingModeScreen> {
   bool _isConsuming = false;
 
   List<RecipeStep> get steps {
-    // Используем реальные шаги из рецепта, если они есть
     if (widget.recipe.steps.isNotEmpty) {
       return widget.recipe.steps;
     }
-    // Fallback на дефолтные шаги
     return [
-      RecipeStep(
-        id: '1', recipeId: widget.recipe.id, stepNumber: 1,
-        instruction: 'Подготовьте все ингредиенты для блюда «${widget.recipe.title}».',
-        timerSeconds: null,
-      ),
-      RecipeStep(
-        id: '2', recipeId: widget.recipe.id, stepNumber: 2,
-        instruction: 'Следуйте рецепту и приготовьте блюдо.',
-        timerSeconds: null,
-      ),
-      RecipeStep(
-        id: '3', recipeId: widget.recipe.id, stepNumber: 3,
-        instruction: 'Блюдо готово! Приятного аппетита!',
-        timerSeconds: null,
-      ),
+      RecipeStep(id: '1', recipeId: widget.recipe.id, stepNumber: 1,
+        instruction: 'Подготовьте все ингредиенты для блюда «${widget.recipe.title}».', timerSeconds: null),
+      RecipeStep(id: '2', recipeId: widget.recipe.id, stepNumber: 2,
+        instruction: 'Следуйте рецепту и приготовьте блюдо.', timerSeconds: null),
+      RecipeStep(id: '3', recipeId: widget.recipe.id, stepNumber: 3,
+        instruction: 'Блюдо готово! Приятного аппетита!', timerSeconds: null),
     ];
   }
 
   void _finishCooking() async {
-    // Haptic feedback
     HapticFeedback.heavyImpact();
     setState(() => _isConsuming = true);
     try {
@@ -67,12 +55,13 @@ class _CookingModeScreenState extends ConsumerState<CookingModeScreen> {
   }
 
   void _showSuccessDialog() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        backgroundColor: AppTheme.surfaceCard,
+        backgroundColor: isDark ? AppTheme.darkSurfaceCard : AppTheme.lightSurfaceCard,
         child: Padding(
           padding: const EdgeInsets.all(32),
           child: Column(
@@ -80,7 +69,7 @@ class _CookingModeScreenState extends ConsumerState<CookingModeScreen> {
             children: [
               Container(
                 width: 80, height: 80,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   gradient: AppTheme.primaryGradient,
                   shape: BoxShape.circle,
                 ),
@@ -89,13 +78,13 @@ class _CookingModeScreenState extends ConsumerState<CookingModeScreen> {
               const SizedBox(height: 24),
               Text(
                 'Приятного аппетита! 🎉',
-                style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
+                style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 8),
               Text(
                 'Данные о питании сохранены\nв вашу статистику',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.inter(fontSize: 14, color: AppTheme.textSecondary),
+                style: GoogleFonts.inter(fontSize: 14, color: Theme.of(ctx).textTheme.bodyMedium?.color),
               ),
               const SizedBox(height: 24),
               SizedBox(
@@ -117,12 +106,14 @@ class _CookingModeScreenState extends ConsumerState<CookingModeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.close_rounded),
-          onPressed: () => context.go('/'),
+          onPressed: () => context.go('/recipes'),
         ),
         title: Text(
           widget.recipe.title,
@@ -149,21 +140,21 @@ class _CookingModeScreenState extends ConsumerState<CookingModeScreen> {
       ),
       body: Column(
         children: [
-          // ──── Progress bar
+          // Progress bar
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
                 value: ((_currentStepIndex + 1) / steps.length),
-                backgroundColor: Colors.white.withOpacity(0.06),
+                backgroundColor: isDark ? Colors.white.withOpacity(0.06) : Colors.grey.withOpacity(0.15),
                 valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primary),
                 minHeight: 4,
               ),
             ),
           ),
 
-          // ──── Steps PageView
+          // Steps
           Expanded(
             child: PageView.builder(
               controller: _pageController,
@@ -181,12 +172,11 @@ class _CookingModeScreenState extends ConsumerState<CookingModeScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Step number badge
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           gradient: AppTheme.primaryGradient,
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.all(Radius.circular(20)),
                         ),
                         child: Text(
                           'Шаг ${step.stepNumber}',
@@ -194,29 +184,18 @@ class _CookingModeScreenState extends ConsumerState<CookingModeScreen> {
                         ),
                       ),
                       const SizedBox(height: 32),
-
-                      // Instruction
                       Container(
                         padding: const EdgeInsets.all(24),
-                        decoration: GlassmorphismDecoration.card(opacity: 0.06),
+                        decoration: GlassmorphismDecoration.card(opacity: 0.06, isDark: isDark),
                         child: Text(
                           step.instruction,
-                          style: GoogleFonts.inter(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.textPrimary,
-                            height: 1.4,
-                          ),
+                          style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w600, height: 1.4),
                           textAlign: TextAlign.center,
                         ),
                       ),
                       const SizedBox(height: 32),
-
-                      // Timer
                       if (step.timerSeconds != null)
                         _GradientTimer(seconds: step.timerSeconds!),
-
-                      // Finish button on last step
                       if (isLast) ...[
                         const SizedBox(height: 32),
                         SizedBox(
@@ -227,11 +206,7 @@ class _CookingModeScreenState extends ConsumerState<CookingModeScreen> {
                               gradient: AppTheme.primaryGradient,
                               borderRadius: BorderRadius.circular(16),
                               boxShadow: [
-                                BoxShadow(
-                                  color: AppTheme.primary.withOpacity(0.4),
-                                  blurRadius: 20,
-                                  offset: const Offset(0, 8),
-                                ),
+                                BoxShadow(color: AppTheme.primary.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 8)),
                               ],
                             ),
                             child: ElevatedButton.icon(
@@ -239,15 +214,8 @@ class _CookingModeScreenState extends ConsumerState<CookingModeScreen> {
                               icon: _isConsuming
                                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
                                   : const Icon(Icons.celebration_rounded, size: 22),
-                              label: Text(
-                                'Приятного аппетита!',
-                                style: GoogleFonts.inter(fontSize: 17, fontWeight: FontWeight.w700),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.transparent,
-                                shadowColor: Colors.transparent,
-                                elevation: 0,
-                              ),
+                              label: Text('Приятного аппетита!', style: GoogleFonts.inter(fontSize: 17, fontWeight: FontWeight.w700)),
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, elevation: 0),
                             ),
                           ),
                         ),
@@ -259,7 +227,7 @@ class _CookingModeScreenState extends ConsumerState<CookingModeScreen> {
             ),
           ),
 
-          // ──── Bottom navigation
+          // Bottom nav
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -268,43 +236,34 @@ class _CookingModeScreenState extends ConsumerState<CookingModeScreen> {
                 children: [
                   TextButton.icon(
                     onPressed: _currentStepIndex > 0
-                        ? () => _pageController.previousPage(
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeInOut)
+                        ? () => _pageController.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut)
                         : null,
                     icon: const Icon(Icons.arrow_back_rounded, size: 18),
                     label: const Text('Назад'),
                   ),
-                  // Step indicators
                   Row(
-                    children: List.generate(
-                      steps.length,
-                      (index) => AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        margin: const EdgeInsets.symmetric(horizontal: 3),
-                        width: index == _currentStepIndex ? 24 : 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(4),
-                          color: index == _currentStepIndex
-                              ? AppTheme.primary
-                              : Colors.white.withOpacity(0.15),
-                        ),
+                    children: List.generate(steps.length, (index) => AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      width: index == _currentStepIndex ? 24 : 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(4),
+                        color: index == _currentStepIndex
+                            ? AppTheme.primary
+                            : (isDark ? Colors.white.withOpacity(0.15) : Colors.grey.withOpacity(0.2)),
                       ),
-                    ),
+                    )),
                   ),
-                  TextButton.icon(
+                  TextButton(
                     onPressed: _currentStepIndex < steps.length - 1
-                        ? () => _pageController.nextPage(
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeInOut)
+                        ? () => _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut)
                         : null,
-                    icon: const Text(''),
-                    label: Row(
-                      children: [
-                        const Text('Далее'),
-                        const SizedBox(width: 4),
-                        const Icon(Icons.arrow_forward_rounded, size: 18),
+                    child: Row(
+                      children: const [
+                        Text('Далее'),
+                        SizedBox(width: 4),
+                        Icon(Icons.arrow_forward_rounded, size: 18),
                       ],
                     ),
                   ),
@@ -318,7 +277,7 @@ class _CookingModeScreenState extends ConsumerState<CookingModeScreen> {
   }
 }
 
-/// Кастомный круговой таймер с градиентом
+/// Circular timer with gradient
 class _GradientTimer extends StatefulWidget {
   final int seconds;
   const _GradientTimer({required this.seconds});
@@ -327,8 +286,7 @@ class _GradientTimer extends StatefulWidget {
   State<_GradientTimer> createState() => _GradientTimerState();
 }
 
-class _GradientTimerState extends State<_GradientTimer>
-    with SingleTickerProviderStateMixin {
+class _GradientTimerState extends State<_GradientTimer> {
   late int _timeLeft;
   Timer? _timer;
   bool _isRunning = false;
@@ -359,10 +317,7 @@ class _GradientTimerState extends State<_GradientTimer>
 
   void _resetTimer() {
     _timer?.cancel();
-    setState(() {
-      _timeLeft = widget.seconds;
-      _isRunning = false;
-    });
+    setState(() { _timeLeft = widget.seconds; _isRunning = false; });
   }
 
   @override
@@ -376,6 +331,7 @@ class _GradientTimerState extends State<_GradientTimer>
     final minutes = (_timeLeft / 60).floor();
     final seconds = _timeLeft % 60;
     final progress = _timeLeft / widget.seconds;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Column(
       children: [
@@ -383,22 +339,19 @@ class _GradientTimerState extends State<_GradientTimer>
           onTap: _toggleTimer,
           onLongPress: _resetTimer,
           child: SizedBox(
-            width: 160,
-            height: 160,
+            width: 160, height: 160,
             child: Stack(
               alignment: Alignment.center,
               children: [
-                // Background ring
                 SizedBox(
                   width: 150, height: 150,
                   child: CircularProgressIndicator(
                     value: 1,
                     strokeWidth: 8,
                     backgroundColor: Colors.transparent,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white.withOpacity(0.06)),
+                    valueColor: AlwaysStoppedAnimation<Color>(isDark ? Colors.white.withOpacity(0.06) : Colors.grey.withOpacity(0.15)),
                   ),
                 ),
-                // Progress ring
                 SizedBox(
                   width: 150, height: 150,
                   child: CircularProgressIndicator(
@@ -411,26 +364,22 @@ class _GradientTimerState extends State<_GradientTimer>
                     ),
                   ),
                 ),
-                // Time display
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}',
-                      style: GoogleFonts.inter(fontSize: 36, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
+                      style: GoogleFonts.inter(fontSize: 36, fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 4),
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 200),
                       child: Icon(
-                        _timeLeft == 0
-                            ? Icons.check_circle_rounded
-                            : _isRunning
-                                ? Icons.pause_rounded
-                                : Icons.play_arrow_rounded,
+                        _timeLeft == 0 ? Icons.check_circle_rounded
+                            : _isRunning ? Icons.pause_rounded : Icons.play_arrow_rounded,
                         key: ValueKey(_isRunning),
                         size: 28,
-                        color: _timeLeft == 0 ? AppTheme.primary : AppTheme.textSecondary,
+                        color: _timeLeft == 0 ? AppTheme.primary : Theme.of(context).textTheme.bodyMedium?.color,
                       ),
                     ),
                   ],
@@ -441,12 +390,9 @@ class _GradientTimerState extends State<_GradientTimer>
         ),
         const SizedBox(height: 8),
         Text(
-          _timeLeft == 0
-              ? 'Готово!'
-              : _isRunning
-                  ? 'Нажмите для паузы'
-                  : 'Нажмите для запуска',
-          style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted),
+          _timeLeft == 0 ? 'Готово!'
+              : _isRunning ? 'Нажмите для паузы' : 'Нажмите для запуска',
+          style: GoogleFonts.inter(fontSize: 12, color: Theme.of(context).textTheme.bodySmall?.color),
         ),
       ],
     );

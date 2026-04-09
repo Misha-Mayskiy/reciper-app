@@ -7,17 +7,21 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 import '../data/profile_repository.dart';
 
+/// Провайдер для переключения периода (week / month)
+final periodProvider = StateProvider<String>((ref) => 'week');
+
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final statsAsync = ref.watch(profileStatsProvider('user_1'));
+    final period = ref.watch(periodProvider);
+    final statsAsync = ref.watch(profileStatsProvider('user_1', period));
 
     return Scaffold(
       body: SafeArea(
         child: statsAsync.when(
-          data: (stats) => _buildContent(context, stats),
+          data: (stats) => _buildContent(context, ref, stats, period),
           loading: () => _buildLoadingState(),
           error: (err, stack) => _buildErrorState(context, ref, err),
         ),
@@ -32,7 +36,7 @@ class ProfileScreen extends ConsumerWidget {
         children: [
           CircularProgressIndicator(color: AppTheme.primary),
           SizedBox(height: 16),
-          Text('Загрузка данных...', style: TextStyle(color: AppTheme.textSecondary)),
+          Text('Загрузка данных...'),
         ],
       ),
     );
@@ -54,18 +58,12 @@ class ProfileScreen extends ConsumerWidget {
               child: const Icon(Icons.cloud_off_rounded, size: 48, color: Colors.redAccent),
             ),
             const SizedBox(height: 24),
-            Text(
-              'Не удалось загрузить данные',
-              style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
-            ),
+            Text('Не удалось загрузить данные', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
-            Text(
-              'Проверьте подключение к серверу',
-              style: GoogleFonts.inter(fontSize: 14, color: AppTheme.textSecondary),
-            ),
+            Text('Проверьте подключение к серверу', style: GoogleFonts.inter(fontSize: 14, color: Theme.of(context).textTheme.bodyMedium?.color)),
             const SizedBox(height: 24),
             ElevatedButton.icon(
-              onPressed: () => ref.invalidate(profileStatsProvider('user_1')),
+              onPressed: () => ref.invalidate(profileStatsProvider('user_1', ref.read(periodProvider))),
               icon: const Icon(Icons.refresh),
               label: const Text('Повторить'),
             ),
@@ -75,8 +73,8 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildContent(BuildContext context, List stats) {
-    // Для демо: если данных нет — показываем приветственное состояние
+  Widget _buildContent(BuildContext context, WidgetRef ref, List stats, String period) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final hasMacroData = stats.isNotEmpty &&
         (stats.last.totalProtein > 0 || stats.last.totalFat > 0 || stats.last.totalCarbs > 0);
 
@@ -86,30 +84,31 @@ class ProfileScreen extends ConsumerWidget {
         // ──── Header
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+            padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
             child: Row(
               children: [
                 Container(
-                  width: 48, height: 48,
+                  width: 44, height: 44,
                   decoration: BoxDecoration(
                     gradient: AppTheme.primaryGradient,
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(13),
                   ),
-                  child: const Icon(Icons.restaurant_rounded, color: Colors.black, size: 24),
+                  child: const Icon(Icons.person_rounded, color: Colors.black, size: 22),
                 ),
-                const SizedBox(width: 14),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Reciper',
-                      style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
-                    ),
-                    Text(
-                      'Ваш AI-ассистент питания',
-                      style: GoogleFonts.inter(fontSize: 13, color: AppTheme.textMuted),
-                    ),
-                  ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Профиль', style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w800)),
+                      Text('Ваш прогресс питания', style: GoogleFonts.inter(fontSize: 13, color: Theme.of(context).textTheme.bodySmall?.color)),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => context.push('/settings'),
+                  icon: const Icon(Icons.settings_rounded),
+                  tooltip: 'Настройки',
                 ),
               ],
             ),
@@ -119,48 +118,51 @@ class ProfileScreen extends ConsumerWidget {
         // ──── Макронутриенты сегодня
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-            child: Text(
-              'Макронутриенты сегодня',
-              style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
-            ),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+            child: Text('Сегодня', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700)),
           ),
         ),
 
         SliverToBoxAdapter(
-          child: hasMacroData
-              ? _buildMacroSection(stats)
-              : _buildEmptyMacroState(),
+          child: hasMacroData ? _buildMacroSection(context, stats, isDark) : _buildEmptyMacroState(context, isDark),
         ),
 
-        // ──── Калории за неделю
+        // ──── Переключатель периода
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
-            child: Text(
-              'Калории за неделю',
-              style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Калории', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700)),
+                Container(
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white.withOpacity(0.06) : Colors.grey.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      _PeriodChip(
+                        label: 'Неделя',
+                        isSelected: period == 'week',
+                        onTap: () => ref.read(periodProvider.notifier).state = 'week',
+                      ),
+                      _PeriodChip(
+                        label: 'Месяц',
+                        isSelected: period == 'month',
+                        onTap: () => ref.read(periodProvider.notifier).state = 'month',
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ),
 
+        // ──── График
         SliverToBoxAdapter(
-          child: _buildWeeklyChart(stats),
-        ),
-
-        // ──── Быстрые действия
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
-            child: Text(
-              'Быстрые действия',
-              style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
-            ),
-          ),
-        ),
-
-        SliverToBoxAdapter(
-          child: _buildQuickActions(context),
+          child: _buildChart(context, stats, period, isDark),
         ),
 
         const SliverToBoxAdapter(child: SizedBox(height: 32)),
@@ -168,38 +170,29 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildEmptyMacroState() {
+  Widget _buildEmptyMacroState(BuildContext context, bool isDark) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(32),
-      decoration: GlassmorphismDecoration.card(),
+      padding: const EdgeInsets.all(28),
+      decoration: GlassmorphismDecoration.card(isDark: isDark),
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppTheme.primary.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.eco_rounded, size: 40, color: AppTheme.primary),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: AppTheme.primary.withOpacity(0.1), shape: BoxShape.circle),
+            child: const Icon(Icons.eco_rounded, size: 36, color: AppTheme.primary),
           ),
-          const SizedBox(height: 16),
-          Text(
-            'Вы ещё ничего не ели сегодня',
-            style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Сфотографируйте холодильник,\nчтобы найти рецепт!',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(fontSize: 14, color: AppTheme.textSecondary),
-          ),
+          const SizedBox(height: 14),
+          Text('Вы ещё ничего не ели сегодня', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 6),
+          Text('Сфотографируйте холодильник и приготовьте что-нибудь!', textAlign: TextAlign.center,
+            style: GoogleFonts.inter(fontSize: 13, color: Theme.of(context).textTheme.bodyMedium?.color)),
         ],
       ),
     );
   }
 
-  Widget _buildMacroSection(List stats) {
+  Widget _buildMacroSection(BuildContext context, List stats, bool isDark) {
     final todayStat = stats.last;
     final protein = todayStat.totalProtein.toDouble();
     final fat = todayStat.totalFat.toDouble();
@@ -209,66 +202,43 @@ class ProfileScreen extends ConsumerWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
       padding: const EdgeInsets.all(20),
-      decoration: GlassmorphismDecoration.card(),
+      decoration: GlassmorphismDecoration.card(isDark: isDark),
       child: Column(
         children: [
-          // Pie chart + калории по центру
           SizedBox(
-            height: 180,
+            height: 160,
             child: Stack(
               alignment: Alignment.center,
               children: [
                 PieChart(
                   PieChartData(
                     sectionsSpace: 3,
-                    centerSpaceRadius: 50,
+                    centerSpaceRadius: 45,
                     startDegreeOffset: -90,
                     sections: [
-                      PieChartSectionData(
-                        color: AppTheme.proteinColor,
-                        value: protein,
-                        title: '',
-                        radius: 28,
-                      ),
-                      PieChartSectionData(
-                        color: AppTheme.fatColor,
-                        value: fat,
-                        title: '',
-                        radius: 28,
-                      ),
-                      PieChartSectionData(
-                        color: AppTheme.carbsColor,
-                        value: carbs,
-                        title: '',
-                        radius: 28,
-                      ),
+                      PieChartSectionData(color: AppTheme.proteinColor, value: protein, title: '', radius: 24),
+                      PieChartSectionData(color: AppTheme.fatColor, value: fat, title: '', radius: 24),
+                      PieChartSectionData(color: AppTheme.carbsColor, value: carbs, title: '', radius: 24),
                     ],
                   ),
                 ),
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      '$calories',
-                      style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
-                    ),
-                    Text(
-                      'ккал',
-                      style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted),
-                    ),
+                    Text('$calories', style: GoogleFonts.inter(fontSize: 26, fontWeight: FontWeight.w800)),
+                    Text('ккал', style: GoogleFonts.inter(fontSize: 11, color: Theme.of(context).textTheme.bodySmall?.color)),
                   ],
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 20),
-          // Легенда
+          const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _buildMacroChip('Белки', '${protein.toInt()}г', AppTheme.proteinColor),
-              _buildMacroChip('Жиры', '${fat.toInt()}г', AppTheme.fatColor),
-              _buildMacroChip('Углеводы', '${carbs.toInt()}г', AppTheme.carbsColor),
+              _MacroChip('Белки', '${protein.toInt()}г', AppTheme.proteinColor),
+              _MacroChip('Жиры', '${fat.toInt()}г', AppTheme.fatColor),
+              _MacroChip('Углеводы', '${carbs.toInt()}г', AppTheme.carbsColor),
             ],
           ),
         ],
@@ -276,43 +246,38 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildMacroChip(String label, String value, Color color) {
+  Widget _MacroChip(String label, String value, Color color) {
     return Column(
       children: [
-        Container(
-          width: 10, height: 10,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-            boxShadow: [BoxShadow(color: color.withOpacity(0.4), blurRadius: 6)],
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(value, style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
-        Text(label, style: GoogleFonts.inter(fontSize: 12, color: AppTheme.textMuted)),
+        Container(width: 10, height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle, boxShadow: [BoxShadow(color: color.withOpacity(0.4), blurRadius: 6)])),
+        const SizedBox(height: 6),
+        Text(value, style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700)),
+        Text(label, style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF9CA3AF))),
       ],
     );
   }
 
-  Widget _buildWeeklyChart(List stats) {
-    // Prepare data points
-    final spots = stats.asMap().entries.map((e) {
-      return FlSpot(e.key.toDouble(), e.value.totalCalories.toDouble());
-    }).toList();
+  Widget _buildChart(BuildContext context, List stats, String period, bool isDark) {
+    if (stats.isEmpty) {
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 20),
+        height: 200,
+        alignment: Alignment.center,
+        child: Text('Нет данных за этот период', style: GoogleFonts.inter(color: Theme.of(context).textTheme.bodySmall?.color)),
+      );
+    }
 
-    // Target line at 2200 kcal
+    final spots = stats.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value.totalCalories.toDouble())).toList();
     const targetCalories = 2200.0;
-
-    final maxY = spots.isEmpty
-        ? targetCalories + 500
-        : [spots.map((s) => s.y).reduce(max), targetCalories].reduce(max) + 300;
+    final maxY = [spots.map((s) => s.y).reduce(max), targetCalories].reduce(max) + 400;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.fromLTRB(12, 24, 20, 12),
-      decoration: GlassmorphismDecoration.card(),
+      padding: const EdgeInsets.fromLTRB(8, 20, 16, 8),
+      decoration: GlassmorphismDecoration.card(isDark: isDark),
       child: SizedBox(
-        height: 200,
+        height: 220,
         child: LineChart(
           LineChartData(
             minY: 0,
@@ -322,7 +287,7 @@ class ProfileScreen extends ConsumerWidget {
               drawVerticalLine: false,
               horizontalInterval: 500,
               getDrawingHorizontalLine: (value) => FlLine(
-                color: Colors.white.withOpacity(0.05),
+                color: isDark ? Colors.white.withOpacity(0.04) : Colors.grey.withOpacity(0.1),
                 strokeWidth: 1,
               ),
             ),
@@ -332,24 +297,38 @@ class ProfileScreen extends ConsumerWidget {
               leftTitles: AxisTitles(
                 sideTitles: SideTitles(
                   showTitles: true,
-                  reservedSize: 40,
+                  reservedSize: 36,
                   interval: 500,
                   getTitlesWidget: (value, meta) => Text(
                     '${value.toInt()}',
-                    style: GoogleFonts.inter(fontSize: 10, color: AppTheme.textMuted),
+                    style: GoogleFonts.inter(fontSize: 10, color: Theme.of(context).textTheme.bodySmall?.color),
                   ),
                 ),
               ),
               bottomTitles: AxisTitles(
                 sideTitles: SideTitles(
                   showTitles: true,
+                  interval: period == 'month' ? 5 : 1,
                   getTitlesWidget: (value, meta) {
-                    final days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
                     final idx = value.toInt();
-                    return Text(
-                      idx < days.length ? days[idx] : '',
-                      style: GoogleFonts.inter(fontSize: 10, color: AppTheme.textMuted),
-                    );
+                    if (idx < 0 || idx >= stats.length) return const Text('');
+                    final dateStr = stats[idx].date;
+                    // Показываем дату кратко
+                    if (period == 'month') {
+                      final parts = dateStr.split('-');
+                      return Text('${parts[2]}.${parts[1]}',
+                        style: GoogleFonts.inter(fontSize: 9, color: Theme.of(context).textTheme.bodySmall?.color));
+                    } else {
+                      final days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+                      // Используем day of week от даты
+                      try {
+                        final d = DateTime.parse(dateStr);
+                        return Text(days[d.weekday - 1],
+                          style: GoogleFonts.inter(fontSize: 10, color: Theme.of(context).textTheme.bodySmall?.color));
+                      } catch (_) {
+                        return Text('$idx', style: GoogleFonts.inter(fontSize: 10));
+                      }
+                    }
                   },
                 ),
               ),
@@ -375,26 +354,23 @@ class ProfileScreen extends ConsumerWidget {
               LineChartBarData(
                 spots: spots,
                 isCurved: true,
-                curveSmoothness: 0.3,
+                curveSmoothness: 0.25,
                 color: AppTheme.primary,
                 barWidth: 3,
                 isStrokeCapRound: true,
                 dotData: FlDotData(
-                  show: true,
+                  show: period == 'week',
                   getDotPainter: (spot, percent, bar, index) => FlDotCirclePainter(
-                    radius: 4,
+                    radius: 3,
                     color: AppTheme.primary,
                     strokeWidth: 2,
-                    strokeColor: AppTheme.background,
+                    strokeColor: Theme.of(context).scaffoldBackgroundColor,
                   ),
                 ),
                 belowBarData: BarAreaData(
                   show: true,
                   gradient: LinearGradient(
-                    colors: [
-                      AppTheme.primary.withOpacity(0.3),
-                      AppTheme.primary.withOpacity(0.0),
-                    ],
+                    colors: [AppTheme.primary.withOpacity(0.25), AppTheme.primary.withOpacity(0.0)],
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                   ),
@@ -406,11 +382,7 @@ class ProfileScreen extends ConsumerWidget {
               touchTooltipData: LineTouchTooltipData(
                 getTooltipItems: (spots) => spots.map((s) => LineTooltipItem(
                   '${s.y.toInt()} ккал',
-                  GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textPrimary,
-                  ),
+                  GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
                 )).toList(),
               ),
             ),
@@ -419,77 +391,33 @@ class ProfileScreen extends ConsumerWidget {
       ),
     );
   }
-
-  Widget _buildQuickActions(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: [
-          Expanded(
-            child: _QuickActionCard(
-              icon: Icons.camera_alt_rounded,
-              label: 'Сканировать\nхолодильник',
-              gradient: AppTheme.primaryGradient,
-              onTap: () => context.go('/scanner'),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _QuickActionCard(
-              icon: Icons.auto_awesome_rounded,
-              label: 'AI генерация\nрецептов',
-              gradient: const LinearGradient(
-                colors: [Color(0xFF7C4DFF), Color(0xFF536DFE)],
-              ),
-              onTap: () => context.go('/scanner'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
-class _QuickActionCard extends StatelessWidget {
-  final IconData icon;
+class _PeriodChip extends StatelessWidget {
   final String label;
-  final LinearGradient gradient;
+  final bool isSelected;
   final VoidCallback onTap;
 
-  const _QuickActionCard({
-    required this.icon,
-    required this.label,
-    required this.gradient,
-    required this.onTap,
-  });
+  const _PeriodChip({required this.label, required this.isSelected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
-          gradient: gradient,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: gradient.colors.first.withOpacity(0.3),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
+          color: isSelected ? AppTheme.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, size: 32, color: Colors.white),
-            const SizedBox(height: 12),
-            Text(
-              label,
-              style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white, height: 1.3),
-            ),
-          ],
+        child: Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: isSelected ? Colors.black : Theme.of(context).textTheme.bodySmall?.color,
+          ),
         ),
       ),
     );

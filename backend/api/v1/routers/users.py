@@ -3,7 +3,7 @@
 GET  /api/v1/users/{user_id}/stats — дашборд КБЖУ.
 POST /api/v1/users — создание пользователя.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from api.dependencies import get_user_service
@@ -25,11 +25,12 @@ router = APIRouter()
 @router.get("/{user_id}/stats")
 async def get_user_stats(
     user_id: str,
+    period: str = Query("week", pattern="^(week|month)$"),
     service: UserService = Depends(get_user_service),
 ):
-    """Возвращает агрегированные данные по КБЖУ для дашборда."""
+    """Возвращает данные по КБЖУ. period: 'week' или 'month'."""
     try:
-        stats = service.get_user_dashboard_stats(user_id)
+        stats = service.get_user_dashboard_stats(user_id, period=period)
         return stats
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

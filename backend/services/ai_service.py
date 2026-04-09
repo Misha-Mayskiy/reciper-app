@@ -2,7 +2,6 @@
 AI-сервис: анализ изображений и генерация рецептов.
 Использует Ollama/llama.cpp (OpenAI-совместимый API) или mock-данные.
 """
-import asyncio
 import json
 import logging
 from typing import Optional

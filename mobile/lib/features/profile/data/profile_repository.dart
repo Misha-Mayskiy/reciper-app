@@ -10,9 +10,12 @@ class ProfileRepository {
 
   ProfileRepository(this.dio);
 
-  Future<List<DailyStat>> getStats(String userId) async {
+  Future<List<DailyStat>> getStats(String userId, {String period = 'week'}) async {
     try {
-      final response = await dio.get('/users/$userId/stats');
+      final response = await dio.get(
+        '/users/$userId/stats',
+        queryParameters: {'period': period},
+      );
       if (response.statusCode == 200) {
         final today = response.data['today'];
         final history = response.data['history'] as List? ?? [];
@@ -27,15 +30,20 @@ class ProfileRepository {
           totalCarbs: json['carbs'] ?? 0,
         )).toList();
 
-        stats.add(DailyStat(
-          id: 'today',
-          userId: userId,
-          date: DateTime.now().toIso8601String(),
-          totalCalories: today['calories'] ?? 0,
-          totalProtein: today['protein'] ?? 0,
-          totalFat: today['fat'] ?? 0,
-          totalCarbs: today['carbs'] ?? 0,
-        ));
+        // Добавляем сегодня последним элементом (для PieChart)
+        final todayDate = DateTime.now().toIso8601String().split('T')[0];
+        final alreadyHasToday = stats.any((s) => s.date == todayDate);
+        if (!alreadyHasToday) {
+          stats.add(DailyStat(
+            id: 'today',
+            userId: userId,
+            date: todayDate,
+            totalCalories: today['calories'] ?? 0,
+            totalProtein: today['protein'] ?? 0,
+            totalFat: today['fat'] ?? 0,
+            totalCarbs: today['carbs'] ?? 0,
+          ));
+        }
         
         return stats;
       }
@@ -53,6 +61,6 @@ ProfileRepository profileRepository(ProfileRepositoryRef ref) {
 }
 
 @riverpod
-Future<List<DailyStat>> profileStats(ProfileStatsRef ref, String userId) {
-  return ref.read(profileRepositoryProvider).getStats(userId);
+Future<List<DailyStat>> profileStats(ProfileStatsRef ref, String userId, String period) {
+  return ref.read(profileRepositoryProvider).getStats(userId, period: period);
 }

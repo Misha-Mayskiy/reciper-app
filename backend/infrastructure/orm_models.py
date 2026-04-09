@@ -1,7 +1,7 @@
-from sqlalchemy import Column, String, Integer, ForeignKey, Date, DateTime
+from sqlalchemy import Column, String, Integer, ForeignKey, Date
 from sqlalchemy.orm import relationship
 from infrastructure.database import Base
-from datetime import datetime
+
 
 class UserOrm(Base):
     __tablename__ = "users"
@@ -14,6 +14,7 @@ class UserOrm(Base):
     target_carbs = Column(Integer)
 
     daily_stats = relationship("DailyStatOrm", back_populates="user")
+
 
 class RecipeOrm(Base):
     __tablename__ = "recipes"
@@ -28,7 +29,9 @@ class RecipeOrm(Base):
     fat = Column(Integer)
     carbs = Column(Integer)
 
-    steps = relationship("RecipeStepOrm", back_populates="recipe", cascade="all, delete-orphan")
+    steps = relationship(
+        "RecipeStepOrm", back_populates="recipe", cascade="all, delete-orphan")
+
 
 class RecipeStepOrm(Base):
     __tablename__ = "recipe_steps"
@@ -40,6 +43,7 @@ class RecipeStepOrm(Base):
     timer_seconds = Column(Integer, nullable=True)
 
     recipe = relationship("RecipeOrm", back_populates="steps")
+
 
 class DailyStatOrm(Base):
     __tablename__ = "daily_stats"

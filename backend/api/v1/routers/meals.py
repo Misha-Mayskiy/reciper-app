@@ -28,7 +28,8 @@ async def consume_meal(
     Добавляет КБЖУ рецепта в DailyStat пользователя на текущую дату.
     """
     try:
-        updated_stats = service.consume_meal(request.user_id, request.recipe_id)
+        updated_stats = service.consume_meal(
+            request.user_id, request.recipe_id)
         return {
             "status": "success",
             "message": "Приём пищи записан",

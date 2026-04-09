@@ -24,7 +24,7 @@ final profileRepositoryProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef ProfileRepositoryRef = AutoDisposeProviderRef<ProfileRepository>;
-String _$profileStatsHash() => r'20fc6b1eeba3389ed3517590723f120f09476439';
+String _$profileStatsHash() => r'8a40c379d42278ff18304711d0042af9769b9b01';
 
 /// Copied from Dart SDK
 class _SystemHash {
@@ -59,9 +59,11 @@ class ProfileStatsFamily extends Family<AsyncValue<List<DailyStat>>> {
   /// See also [profileStats].
   ProfileStatsProvider call(
     String userId,
+    String period,
   ) {
     return ProfileStatsProvider(
       userId,
+      period,
     );
   }
 
@@ -71,6 +73,7 @@ class ProfileStatsFamily extends Family<AsyncValue<List<DailyStat>>> {
   ) {
     return call(
       provider.userId,
+      provider.period,
     );
   }
 
@@ -94,10 +97,12 @@ class ProfileStatsProvider extends AutoDisposeFutureProvider<List<DailyStat>> {
   /// See also [profileStats].
   ProfileStatsProvider(
     String userId,
+    String period,
   ) : this._internal(
           (ref) => profileStats(
             ref as ProfileStatsRef,
             userId,
+            period,
           ),
           from: profileStatsProvider,
           name: r'profileStatsProvider',
@@ -109,6 +114,7 @@ class ProfileStatsProvider extends AutoDisposeFutureProvider<List<DailyStat>> {
           allTransitiveDependencies:
               ProfileStatsFamily._allTransitiveDependencies,
           userId: userId,
+          period: period,
         );
 
   ProfileStatsProvider._internal(
@@ -119,9 +125,11 @@ class ProfileStatsProvider extends AutoDisposeFutureProvider<List<DailyStat>> {
     required super.debugGetCreateSourceHash,
     required super.from,
     required this.userId,
+    required this.period,
   }) : super.internal();
 
   final String userId;
+  final String period;
 
   @override
   Override overrideWith(
@@ -137,6 +145,7 @@ class ProfileStatsProvider extends AutoDisposeFutureProvider<List<DailyStat>> {
         allTransitiveDependencies: null,
         debugGetCreateSourceHash: null,
         userId: userId,
+        period: period,
       ),
     );
   }
@@ -148,13 +157,16 @@ class ProfileStatsProvider extends AutoDisposeFutureProvider<List<DailyStat>> {
 
   @override
   bool operator ==(Object other) {
-    return other is ProfileStatsProvider && other.userId == userId;
+    return other is ProfileStatsProvider &&
+        other.userId == userId &&
+        other.period == period;
   }
 
   @override
   int get hashCode {
     var hash = _SystemHash.combine(0, runtimeType.hashCode);
     hash = _SystemHash.combine(hash, userId.hashCode);
+    hash = _SystemHash.combine(hash, period.hashCode);
 
     return _SystemHash.finish(hash);
   }
@@ -165,6 +177,9 @@ class ProfileStatsProvider extends AutoDisposeFutureProvider<List<DailyStat>> {
 mixin ProfileStatsRef on AutoDisposeFutureProviderRef<List<DailyStat>> {
   /// The parameter `userId` of this provider.
   String get userId;
+
+  /// The parameter `period` of this provider.
+  String get period;
 }
 
 class _ProfileStatsProviderElement
@@ -174,6 +189,8 @@ class _ProfileStatsProviderElement
 
   @override
   String get userId => (origin as ProfileStatsProvider).userId;
+  @override
+  String get period => (origin as ProfileStatsProvider).period;
 }
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package

@@ -64,25 +64,27 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: _isLoading ? _buildLoadingState() : _buildContent(),
+        child: _isLoading ? _buildLoadingState(context) : _buildContent(context),
       ),
     );
   }
 
-  Widget _buildLoadingState() {
-    return const Center(
+  Widget _buildLoadingState(BuildContext context) {
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircularProgressIndicator(color: AppTheme.primary),
-          SizedBox(height: 16),
-          Text('Загрузка изображения...', style: TextStyle(color: AppTheme.textSecondary)),
+          const CircularProgressIndicator(color: AppTheme.primary),
+          const SizedBox(height: 16),
+          Text('Загрузка изображения...', style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color)),
         ],
       ),
     );
   }
 
-  Widget _buildContent() {
+  Widget _buildContent(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return CustomScrollView(
       physics: const BouncingScrollPhysics(),
       slivers: [
@@ -91,7 +93,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
             child: Text(
               'AI Сканер',
-              style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
+              style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.w800),
             ),
           ),
         ),
@@ -100,11 +102,11 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
             child: Text(
               'Сфотографируйте содержимое холодильника,\nи AI предложит рецепты',
-              style: GoogleFonts.inter(fontSize: 14, color: AppTheme.textSecondary, height: 1.4),
+              style: GoogleFonts.inter(fontSize: 14, color: Theme.of(context).textTheme.bodyMedium?.color, height: 1.4),
             ),
           ),
         ),
-        // ──── Иллюстрация
+        // ──── Illustration
         SliverToBoxAdapter(
           child: Center(
             child: AnimatedBuilder(
@@ -159,13 +161,12 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
 
         const SliverToBoxAdapter(child: SizedBox(height: 40)),
 
-        // ──── Кнопки
+        // ──── Buttons
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Column(
               children: [
-                // Камера — главная кнопка
                 SizedBox(
                   width: double.infinity,
                   height: 56,
@@ -194,7 +195,6 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
                   ),
                 ),
                 const SizedBox(height: 16),
-                // Галерея — второстепенная
                 SizedBox(
                   width: double.infinity,
                   height: 56,
@@ -203,8 +203,8 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
                     icon: const Icon(Icons.photo_library_rounded, size: 20),
                     label: Text('Выбрать из галереи', style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w500)),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.textPrimary,
-                      side: BorderSide(color: Colors.white.withOpacity(0.15)),
+                      foregroundColor: Theme.of(context).textTheme.bodyLarge?.color,
+                      side: BorderSide(color: isDark ? Colors.white.withOpacity(0.15) : Colors.grey.withOpacity(0.3)),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
                   ),
@@ -216,13 +216,13 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
 
         const SliverToBoxAdapter(child: SizedBox(height: 32)),
 
-        // ──── Подсказки
+        // ──── Tips
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Container(
               padding: const EdgeInsets.all(16),
-              decoration: GlassmorphismDecoration.card(opacity: 0.05),
+              decoration: GlassmorphismDecoration.card(opacity: 0.05, isDark: isDark),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -234,9 +234,9 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
                     ],
                   ),
                   const SizedBox(height: 12),
-                  _buildTip('📸', 'Убедитесь, что продукты хорошо видны'),
-                  _buildTip('💡', 'Фотографируйте при хорошем освещении'),
-                  _buildTip('🥦', 'Откройте дверцу холодильника полностью'),
+                  _buildTip(context, '📸', 'Убедитесь, что продукты хорошо видны'),
+                  _buildTip(context, '💡', 'Фотографируйте при хорошем освещении'),
+                  _buildTip(context, '🥦', 'Откройте дверцу холодильника полностью'),
                 ],
               ),
             ),
@@ -248,7 +248,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
     );
   }
 
-  Widget _buildTip(String emoji, String text) {
+  Widget _buildTip(BuildContext context, String emoji, String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -256,7 +256,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
           Text(emoji, style: const TextStyle(fontSize: 16)),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(text, style: GoogleFonts.inter(fontSize: 13, color: AppTheme.textSecondary)),
+            child: Text(text, style: GoogleFonts.inter(fontSize: 13, color: Theme.of(context).textTheme.bodyMedium?.color)),
           ),
         ],
       ),

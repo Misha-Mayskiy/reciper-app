@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 import '../data/scanner_repository.dart';
+import '../../recipes/data/saved_recipes_provider.dart';
 
 class ProcessingScreen extends ConsumerStatefulWidget {
   final String taskId;
@@ -20,8 +21,8 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen>
   Timer? _pollingTimer;
   late AnimationController _rotationController;
   late AnimationController _pulseController;
-  late AnimationController _dotsController;
   int _dotCount = 0;
+  Timer? _dotsTimer;
 
   final List<String> _funMessages = [
     'Нейросеть изучает холодильник',
@@ -31,6 +32,7 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen>
     'Скоро будет готово',
   ];
   int _messageIndex = 0;
+  Timer? _messageTimer;
 
   @override
   void initState() {
@@ -46,29 +48,12 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen>
       duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
 
-    _dotsController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    )..addStatusListener((status) {
-        if (status == AnimationStatus.completed) {
-          setState(() {
-            _dotCount = (_dotCount + 1) % 4;
-          });
-          _dotsController.reset();
-          _dotsController.forward();
-        }
-      });
-    _dotsController.forward();
+    _dotsTimer = Timer.periodic(const Duration(milliseconds: 600), (_) {
+      if (mounted) setState(() => _dotCount = (_dotCount + 1) % 4);
+    });
 
-    // Rotate message every 3s
-    Timer.periodic(const Duration(seconds: 3), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      setState(() {
-        _messageIndex = (_messageIndex + 1) % _funMessages.length;
-      });
+    _messageTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (mounted) setState(() => _messageIndex = (_messageIndex + 1) % _funMessages.length);
     });
 
     _startPolling();
@@ -82,7 +67,10 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen>
         if (resp.status == 'done') {
           timer.cancel();
           if (!mounted) return;
-          context.go('/recipes', extra: resp.recipes);
+          // Сохраняем рецепты в providerе для вкладки "Блюда"
+          final recipes = resp.recipes ?? [];
+          ref.read(savedRecipesProvider.notifier).setRecipes(recipes);
+          context.go('/recipes');
         } else if (resp.status == 'error') {
           timer.cancel();
           if (!mounted) return;
@@ -105,22 +93,28 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen>
   @override
   void dispose() {
     _pollingTimer?.cancel();
+    _dotsTimer?.cancel();
+    _messageTimer?.cancel();
     _rotationController.dispose();
     _pulseController.dispose();
-    _dotsController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(gradient: AppTheme.darkGradient),
+        decoration: BoxDecoration(
+          gradient: isDark ? AppTheme.primaryGradient.scale(0.1) : null,
+          color: isDark ? null : Theme.of(context).scaffoldBackgroundColor,
+        ),
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // ──── Animated AI Brain
+              // ──── Animated AI
               AnimatedBuilder(
                 animation: Listenable.merge([_rotationController, _pulseController]),
                 builder: (context, child) {
@@ -136,11 +130,7 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen>
                           color: AppTheme.primary,
                         ),
                         child: const Center(
-                          child: Icon(
-                            Icons.auto_awesome_rounded,
-                            size: 48,
-                            color: AppTheme.primary,
-                          ),
+                          child: Icon(Icons.auto_awesome_rounded, size: 48, color: AppTheme.primary),
                         ),
                       ),
                     ),
@@ -148,35 +138,26 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen>
                 },
               ),
               const SizedBox(height: 48),
-              // ──── Message
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 500),
                 child: Text(
                   '${_funMessages[_messageIndex]}${'.' * _dotCount}',
                   key: ValueKey('$_messageIndex-$_dotCount'),
-                  style: GoogleFonts.inter(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textPrimary,
-                  ),
+                  style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w600),
                 ),
               ),
               const SizedBox(height: 16),
               Text(
                 'Это может занять несколько секунд',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  color: AppTheme.textMuted,
-                ),
+                style: GoogleFonts.inter(fontSize: 14, color: Theme.of(context).textTheme.bodySmall?.color),
               ),
               const SizedBox(height: 48),
-              // ──── Progress bar
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 64),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
-                    backgroundColor: Colors.white.withOpacity(0.06),
+                    backgroundColor: isDark ? Colors.white.withOpacity(0.06) : Colors.grey.withOpacity(0.15),
                     valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primary),
                     minHeight: 4,
                   ),
@@ -190,7 +171,7 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen>
   }
 }
 
-/// Кастомный painter для AI-визуализации (вращающиеся орбиты)
+/// AI orbiting animation painter
 class _AIPainter extends CustomPainter {
   final double rotation;
   final Color color;
@@ -201,23 +182,19 @@ class _AIPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
 
-    // Outer orbit ring
     final outerPaint = Paint()
       ..color = color.withOpacity(0.15)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
     canvas.drawCircle(center, 65, outerPaint);
 
-    // Inner orbit ring
     final innerPaint = Paint()
       ..color = color.withOpacity(0.1)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
     canvas.drawCircle(center, 45, innerPaint);
 
-    // Rotating dots on orbits
     final dotPaint = Paint()..color = color;
-
     for (int i = 0; i < 3; i++) {
       final angle = rotation * 2 * pi + (i * 2 * pi / 3);
       final x = center.dx + 65 * cos(angle);
@@ -229,10 +206,9 @@ class _AIPainter extends CustomPainter {
       final angle = -rotation * 2 * pi + (i * pi);
       final x = center.dx + 45 * cos(angle);
       final y = center.dy + 45 * sin(angle);
-      canvas.drawCircle(Offset(x, y), 3, dotPaint..color = color.withOpacity(0.6));
+      canvas.drawCircle(Offset(x, y), 3, Paint()..color = color.withOpacity(0.6));
     }
 
-    // Glow at center
     final glowPaint = Paint()
       ..color = color.withOpacity(0.08)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20);
@@ -240,6 +216,5 @@ class _AIPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _AIPainter oldDelegate) =>
-      oldDelegate.rotation != rotation;
+  bool shouldRepaint(covariant _AIPainter oldDelegate) => oldDelegate.rotation != rotation;
 }

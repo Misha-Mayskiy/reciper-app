@@ -46,9 +46,6 @@ class UserService:
     def consume_meal(self, user_id: str, recipe_id: str) -> dict:
         """
         Логирует приём пищи: добавляет КБЖУ рецепта в дневную статистику.
-
-        Raises:
-            ValueError: Если рецепт не найден.
         """
         recipe = self.recipe_repo.get_recipe(recipe_id)
         if not recipe:
@@ -57,7 +54,6 @@ class UserService:
         today = date.today()
         stat = self.get_or_create_daily_stat(user_id, today)
 
-        # Добавляем макронутриенты
         stat.total_calories = (stat.total_calories or 0) + recipe.calories
         stat.total_protein = (stat.total_protein or 0) + recipe.protein
         stat.total_fat = (stat.total_fat or 0) + recipe.fat
@@ -76,27 +72,26 @@ class UserService:
             "total_carbs": stat.total_carbs,
         }
 
-    def get_user_dashboard_stats(self, user_id: str) -> dict:
+    def get_user_dashboard_stats(self, user_id: str, period: str = "week") -> dict:
         """
-        Возвращает агрегированные данные для дашборда:
-        - Целевые значения КБЖУ
-        - Статистика за сегодня
-        - История за 7 дней
+        Возвращает агрегированные данные для дашборда.
 
-        Raises:
-            ValueError: Если пользователь не найден.
+        Args:
+            period: 'week' (7 дней) или 'month' (30 дней).
         """
         user = self.user_repo.get_user(user_id)
         if not user:
             raise ValueError(f"Пользователь с id={user_id} не найден")
 
-        stats = self.stat_repo.get_stats_for_user(user_id, limit=7)
+        limit = 7 if period == "week" else 30
+        stats = self.stat_repo.get_stats_for_user(user_id, limit=limit)
         today = date.today()
         today_stat = next((s for s in stats if s.date == today), None)
 
         return {
             "user_id": user_id,
             "user_name": user.name,
+            "period": period,
             "daily_target": {
                 "calories": user.daily_calories_target,
                 "protein": user.target_protein,
@@ -112,11 +107,11 @@ class UserService:
             "history": [
                 {
                     "date": s.date.isoformat(),
-                    "calories": s.total_calories,
-                    "protein": s.total_protein,
-                    "fat": s.total_fat,
-                    "carbs": s.total_carbs,
+                    "calories": s.total_calories or 0,
+                    "protein": s.total_protein or 0,
+                    "fat": s.total_fat or 0,
+                    "carbs": s.total_carbs or 0,
                 }
-                for s in reversed(stats)  # Chronological order
+                for s in reversed(stats)
             ],
         }
