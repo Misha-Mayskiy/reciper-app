@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'core/router/app_router.dart';
+import 'core/theme/app_theme.dart';
 
 void main() {
   runApp(
@@ -14,26 +16,25 @@ class ReciperApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return MaterialApp(
+    final router = ref.watch(appRouterProvider);
+    return MaterialApp.router(
       title: 'Reciper',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
-        useMaterial3: true,
-      ),
-      home: const PlaceholderScreen(),
+      theme: AppTheme.darkTheme,
+      routerConfig: router,
     );
   }
 }
 
 class PlaceholderScreen extends StatelessWidget {
-  const PlaceholderScreen({super.key});
+  final String title;
+  const PlaceholderScreen({super.key, this.title = 'Reciper'});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Reciper')),
-      body: const Center(
-        child: Text('AI-ассистент питания скоро будет здесь!'),
+      appBar: AppBar(title: Text(title)),
+      body: Center(
+        child: Text('$title скоро будет здесь!'),
       ),
     );
   }
