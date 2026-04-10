@@ -50,12 +50,79 @@ SYSTEM_PROMPT = """Ты профессиональный шеф-повар ИИ-
 
 class AIService:
     """
-    Сервис обработки изображений холодильника.
-    Генерирует рецепты на основе распознанных продуктов.
+    Сервис обработки изображений холодильника и генерации плана питания.
     """
 
     def __init__(self, task_service: TaskService):
         self.task_service = task_service
+
+    async def generate_personal_plan(self, user_id: str, goal: str, allergies: str, preferences: str) -> dict:
+        """Генерирует персональный план питания на основе анкеты без использования фото."""
+        prompt = f"""
+        Ты профессиональный ИИ-диетолог. Составь план питания (3 рецепта) на день для пользователя.
+        Его цель: {goal}
+        Аллергии/Непереносимости: {allergies if allergies else "Нет"}
+        Пожелания (вкусы): {preferences if preferences else "Нет особых пожеланий"}
+
+        Верни ТОЛЬКО валидный JSON в формате:
+        {{
+          "recipes": [
+            {{
+              "title": "Название",
+              "description": "Описание",
+              "search_query": "food photography dish",
+              "prep_time_minutes": 15,
+              "calories": 400,
+              "protein": 30,
+              "fat": 15,
+              "carbs": 40,
+              "steps": [ {{"step_number": 1, "instruction": "Шаг 1", "timer_seconds": null}} ]
+            }}
+          ]
+        }}
+        """
+
+        try:
+            ai_result = None
+            if hasattr(settings, "client") and settings.client:
+                from fastapi.concurrency import run_in_threadpool
+                response = await run_in_threadpool(
+                    lambda: settings.client.chat.completions.create(
+                        model="google/gemini-3-flash-preview",
+                        messages=[
+                            {"role": "system", "content": "Ты профессиональный ИИ-диетолог. Отвечай только валидным JSON."},
+                            {"role": "user", "content": prompt}
+                        ],
+                    )
+                )
+                ai_result = self._parse_ai_response(
+                    response.choices[0].message.content)
+
+            if not ai_result:
+                ai_result = self._get_mock_data()
+
+            recipes_data = ai_result.get("recipes", [])
+
+            with SessionLocal() as db:
+                recipe_repo = RecipeRepository(db)
+                for recipe in recipes_data:
+                    search_query = recipe.pop("search_query", recipe["title"])
+                    recipe["image_url"] = await fetch_recipe_image(search_query)
+                    steps = recipe.pop("steps", [])
+                    new_recipe = recipe_repo.create_recipe_with_steps(
+                        recipe, steps)
+                    recipe["id"] = new_recipe.id
+                    recipe["steps"] = [
+                        {
+                            "id": s.id, "recipe_id": s.recipe_id, "step_number": s.step_number,
+                            "instruction": s.instruction, "timer_seconds": s.timer_seconds
+                        } for s in new_recipe.steps
+                    ]
+
+            return {"recipes": recipes_data}
+        except Exception as e:
+            logger.error(f"Ошибка генерации плана: {e}")
+            return self._get_mock_data()
 
     async def process_fridge_image(
         self, task_id: str, image_bytes: Optional[bytes] = None
@@ -65,27 +132,22 @@ class AIService:
 
             ai_result = None
 
-            # 1. Попытка обратиться к основному API (Gemini/OpenAI)
             if hasattr(settings, "client") and settings.client:
                 logger.info("Пробуем основное API (Gemini/OpenAI)...")
                 ai_result = await self._call_openai(image_bytes)
 
-            # 2. Если основное API упало или не настроено — пробуем Ollama
             if ai_result is None:
                 logger.warning("Основное API недоступно. Fallback -> Ollama")
                 ai_result = await self._call_ollama(image_bytes)
 
-            # 3. Если и Ollama недоступна/не справилась — используем mock-данные
             if ai_result is None:
                 logger.warning(
-                    "Ollama недоступна или вернула ошибку — используем mock-данные"
-                )
+                    "Ollama недоступна или вернула ошибку — используем mock-данные")
                 ai_result = self._get_mock_data()
 
             detected_ingredients = ai_result.get("ingredients", [])
             recipes_data = ai_result.get("recipes", [])
 
-            # --- Дальше твой оригинальный код сохранения в БД ---
             with SessionLocal() as db:
                 recipe_repo = RecipeRepository(db)
 
@@ -145,7 +207,6 @@ class AIService:
             image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
             payload = {
-                # Убедись, что это имя модели актуально для vsellm
                 "model": "google/gemini-3-flash-preview",
                 "messages": [
                     {"role": "system", "content": SYSTEM_PROMPT},
@@ -161,7 +222,6 @@ class AIService:
                 ],
             }
 
-            # Используем run_in_threadpool, так как клиент OpenAI синхронный
             from fastapi.concurrency import run_in_threadpool
             response = await run_in_threadpool(
                 lambda: settings.client.chat.completions.create(**payload)
@@ -171,15 +231,10 @@ class AIService:
             return self._parse_ai_response(content)
 
         except Exception as e:
-            # ВОТ ТУТ МЫ УВИДИМ РЕАЛЬНУЮ ПРИЧИНУ
             logger.error(f"❌ Ошибка VSELLM: {type(e).__name__}: {e}")
             return None
 
     async def _call_ollama(self, image_bytes: Optional[bytes] = None) -> Optional[dict]:
-        """
-        Отправляет изображение в Ollama VLM и парсит JSON-ответ.
-        Возвращает None если Ollama недоступна или ответ невалидный.
-        """
         if image_bytes is None:
             logger.info("Нет изображения — пропускаем вызов Ollama")
             return None
@@ -211,10 +266,7 @@ class AIService:
                 response.raise_for_status()
                 data = response.json()
 
-            # Извлекаем текст ответа
             content = data.get("message", {}).get("content", "")
-
-            # Парсим JSON из ответа
             return self._parse_ai_response(content)
 
         except httpx.ConnectError:
@@ -229,13 +281,8 @@ class AIService:
             return None
 
     def _parse_ai_response(self, content: str) -> Optional[dict]:
-        """
-        Безопасный парсинг JSON из ответа нейросети.
-        Обрабатывает случаи невалидного JSON с fallback.
-        """
         try:
             result = json.loads(content)
-            # Валидация минимальной структуры
             if "recipes" in result and isinstance(result["recipes"], list):
                 logger.info("AI: JSON ответ успешно распарсен")
                 return result
@@ -244,7 +291,6 @@ class AIService:
                 return None
         except json.JSONDecodeError as e:
             logger.error(f"AI: невалидный JSON — {e}")
-            # Попытка извлечь JSON из текста
             try:
                 start = content.index("{")
                 end = content.rindex("}") + 1
@@ -255,19 +301,12 @@ class AIService:
 
     @staticmethod
     def _get_mock_data() -> dict:
-        """Mock-данные для разработки без Ollama."""
         return {
-            "ingredients": [
-                "помидоры",
-                "сыр",
-                "яйца",
-                "лук",
-                "зелень",
-            ],
+            "ingredients": ["помидоры", "сыр", "яйца", "лук", "зелень"],
             "recipes": [
                 {
                     "title": "Омлет с помидорами и сыром",
-                    "description": "Быстрый и сытный омлет с нежным сыром и свежими помидорами. Идеальный завтрак за 15 минут!",
+                    "description": "Быстрый и сытный омлет с нежным сыром и свежими помидорами.",
                     "search_query": "tomato cheese omelet breakfast",
                     "prep_time_minutes": 15,
                     "calories": 350,
@@ -275,36 +314,21 @@ class AIService:
                     "fat": 24,
                     "carbs": 6,
                     "steps": [
-                        {
-                            "step_number": 1,
-                            "instruction": "Нарежьте помидоры кубиками, мелко нашинкуйте лук и натрите сыр на крупной тёрке.",
-                            "timer_seconds": None,
-                        },
-                        {
-                            "step_number": 2,
-                            "instruction": "Взбейте 3 яйца с щепоткой соли и перца до однородной массы.",
-                            "timer_seconds": None,
-                        },
-                        {
-                            "step_number": 3,
-                            "instruction": "Разогрейте сковороду с маслом на среднем огне. Обжарьте лук до золотистого цвета.",
-                            "timer_seconds": 120,
-                        },
-                        {
-                            "step_number": 4,
-                            "instruction": "Вылейте яичную смесь, добавьте помидоры. Готовьте под крышкой на слабом огне.",
-                            "timer_seconds": 180,
-                        },
-                        {
-                            "step_number": 5,
-                            "instruction": "Посыпьте тёртым сыром и зеленью. Подавайте горячим!",
-                            "timer_seconds": None,
-                        },
+                        {"step_number": 1, "instruction": "Нарежьте помидоры кубиками и натрите сыр.",
+                            "timer_seconds": None},
+                        {"step_number": 2, "instruction": "Взбейте яйца с солью и перцем.",
+                            "timer_seconds": None},
+                        {"step_number": 3, "instruction": "Обжарьте помидоры на сковороде.",
+                            "timer_seconds": 120},
+                        {"step_number": 4, "instruction": "Вылейте яичную смесь. Готовьте под крышкой.",
+                            "timer_seconds": 180},
+                        {"step_number": 5, "instruction": "Посыпьте тёртым сыром и зеленью.",
+                            "timer_seconds": None},
                     ],
                 },
                 {
                     "title": "Свежий овощной салат",
-                    "description": "Лёгкий и полезный салат из свежих овощей с оливковым маслом. Отличный гарнир или самостоятельное блюдо.",
+                    "description": "Лёгкий салат из свежих овощей с оливковым маслом.",
                     "search_query": "fresh tomato vegetable salad",
                     "prep_time_minutes": 10,
                     "calories": 150,
@@ -312,53 +336,28 @@ class AIService:
                     "fat": 10,
                     "carbs": 15,
                     "steps": [
-                        {
-                            "step_number": 1,
-                            "instruction": "Вымойте все овощи. Нарежьте помидоры дольками, лук — полукольцами.",
-                            "timer_seconds": None,
-                        },
-                        {
-                            "step_number": 2,
-                            "instruction": "Смешайте все ингредиенты в большой миске. Заправьте оливковым маслом, посолите.",
-                            "timer_seconds": None,
-                        },
-                        {
-                            "step_number": 3,
-                            "instruction": "Украсьте зеленью и подавайте сразу. Приятного аппетита!",
-                            "timer_seconds": None,
-                        },
+                        {"step_number": 1, "instruction": "Нарежьте помидоры дольками, лук — полукольцами.",
+                            "timer_seconds": None},
+                        {"step_number": 2, "instruction": "Смешайте ингредиенты. Заправьте маслом.",
+                            "timer_seconds": None},
                     ],
                 },
                 {
-                    "title": "Яичница-глазунья с луком",
-                    "description": "Классическая яичница с хрустящим луком. Быстрый перекус на каждый день.",
-                    "search_query": "fried eggs with onions",
+                    "title": "Яичница-глазунья",
+                    "description": "Классическая яичница для быстрого перекуса.",
+                    "search_query": "fried eggs",
                     "prep_time_minutes": 8,
                     "calories": 280,
                     "protein": 18,
                     "fat": 20,
                     "carbs": 4,
                     "steps": [
-                        {
-                            "step_number": 1,
-                            "instruction": "Нарежьте лук тонкими полукольцами.",
-                            "timer_seconds": None,
-                        },
-                        {
-                            "step_number": 2,
-                            "instruction": "Разогрейте масло на сковороде. Обжарьте лук до золотистой корочки.",
-                            "timer_seconds": 90,
-                        },
-                        {
-                            "step_number": 3,
-                            "instruction": "Аккуратно разбейте 2-3 яйца на сковороду. Посолите, поперчите.",
-                            "timer_seconds": None,
-                        },
-                        {
-                            "step_number": 4,
-                            "instruction": "Накройте крышкой и готовьте на среднем огне до застывания белка.",
-                            "timer_seconds": 150,
-                        },
+                        {"step_number": 1, "instruction": "Разогрейте масло на сковороде.",
+                            "timer_seconds": None},
+                        {"step_number": 2, "instruction": "Разбейте яйца, посолите.",
+                            "timer_seconds": None},
+                        {"step_number": 3, "instruction": "Готовьте до застывания белка.",
+                            "timer_seconds": 150},
                     ],
                 },
             ],

@@ -13,6 +13,11 @@ class UserOrm(Base):
     target_fat = Column(Integer)
     target_carbs = Column(Integer)
 
+    # Новые поля для вкладки "Мой план"
+    goal = Column(String, nullable=True)
+    allergies = Column(String, nullable=True)
+    preferences = Column(String, nullable=True)
+
     daily_stats = relationship("DailyStatOrm", back_populates="user")
 
 

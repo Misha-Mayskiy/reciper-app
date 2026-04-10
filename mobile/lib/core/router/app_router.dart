@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import '../../features/plan/presentation/plan_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/profile/presentation/settings_screen.dart';
 import '../../features/scanner/presentation/scanner_screen.dart';
@@ -12,7 +13,6 @@ import '../../core/domain/models/recipe.dart';
 
 part 'app_router.g.dart';
 
-/// Обёртка с 3-tab Bottom Navigation Bar
 class MainShell extends StatefulWidget {
   final Widget child;
   final String location;
@@ -28,25 +28,27 @@ class _MainShellState extends State<MainShell> {
   @override
   void didUpdateWidget(MainShell oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Синхронизируем tab index с текущим маршрутом
-    if (widget.location.startsWith('/scanner')) {
+    if (widget.location.startsWith('/plan')) {
       _currentIndex = 0;
-    } else if (widget.location.startsWith('/recipes')) {
+    } else if (widget.location.startsWith('/scanner')) {
       _currentIndex = 1;
-    } else if (widget.location == '/' || widget.location.startsWith('/profile')) {
+    } else if (widget.location.startsWith('/recipes')) {
       _currentIndex = 2;
+    } else if (widget.location == '/' || widget.location.startsWith('/profile')) {
+      _currentIndex = 3;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Синхронизация при начальной отрисовке
-    if (widget.location.startsWith('/scanner')) {
+    if (widget.location.startsWith('/plan')) {
       _currentIndex = 0;
-    } else if (widget.location.startsWith('/recipes')) {
+    } else if (widget.location.startsWith('/scanner')) {
       _currentIndex = 1;
-    } else if (widget.location == '/' || widget.location.startsWith('/profile')) {
+    } else if (widget.location.startsWith('/recipes')) {
       _currentIndex = 2;
+    } else if (widget.location == '/' || widget.location.startsWith('/profile')) {
+      _currentIndex = 3;
     }
 
     return Scaffold(
@@ -66,17 +68,25 @@ class _MainShellState extends State<MainShell> {
             setState(() => _currentIndex = index);
             switch (index) {
               case 0:
-                context.go('/scanner');
+                context.go('/plan');
                 break;
               case 1:
-                context.go('/recipes');
+                context.go('/scanner');
                 break;
               case 2:
+                context.go('/recipes');
+                break;
+              case 3:
                 context.go('/');
                 break;
             }
           },
           items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.assignment_outlined),
+              activeIcon: Icon(Icons.assignment_rounded),
+              label: 'План',
+            ),
             BottomNavigationBarItem(
               icon: Icon(Icons.document_scanner_outlined),
               activeIcon: Icon(Icons.document_scanner_rounded),
@@ -102,7 +112,7 @@ class _MainShellState extends State<MainShell> {
 @Riverpod(keepAlive: true)
 GoRouter appRouter(AppRouterRef ref) {
   return GoRouter(
-    initialLocation: '/scanner',
+    initialLocation: '/plan',
     routes: [
       ShellRoute(
         builder: (context, state, child) => MainShell(
@@ -110,6 +120,11 @@ GoRouter appRouter(AppRouterRef ref) {
           child: child,
         ),
         routes: [
+          GoRoute(
+            path: '/plan',
+            name: 'plan',
+            builder: (context, state) => const PlanScreen(),
+          ),
           GoRoute(
             path: '/scanner',
             name: 'scanner',
@@ -127,7 +142,6 @@ GoRouter appRouter(AppRouterRef ref) {
           ),
         ],
       ),
-      // Экраны без Bottom Nav
       GoRoute(
         path: '/processing',
         name: 'processing',

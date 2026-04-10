@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -170,7 +169,6 @@ class _CookingModeScreenState extends ConsumerState<CookingModeScreen> {
                 return Padding(
                   padding: const EdgeInsets.all(24),
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -183,21 +181,36 @@ class _CookingModeScreenState extends ConsumerState<CookingModeScreen> {
                           style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.black),
                         ),
                       ),
-                      const SizedBox(height: 32),
-                      Container(
-                        padding: const EdgeInsets.all(24),
-                        decoration: GlassmorphismDecoration.card(opacity: 0.06, isDark: isDark),
-                        child: Text(
-                          step.instruction,
-                          style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w600, height: 1.4),
-                          textAlign: TextAlign.center,
+                      const SizedBox(height: 24),
+                      
+                      // Расширяемая скроллируемая область для текста и таймера
+                      Expanded(
+                        child: SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(24),
+                                decoration: GlassmorphismDecoration.card(opacity: 0.06, isDark: isDark),
+                                child: Text(
+                                  step.instruction,
+                                  style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w600, height: 1.4),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                              const SizedBox(height: 32),
+                              if (step.timerSeconds != null)
+                                _GradientTimer(seconds: step.timerSeconds!),
+                            ],
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 32),
-                      if (step.timerSeconds != null)
-                        _GradientTimer(seconds: step.timerSeconds!),
+                      
+                      // Кнопка всегда внизу
                       if (isLast) ...[
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 16),
                         SizedBox(
                           width: double.infinity,
                           height: 56,
