@@ -3,7 +3,9 @@
 Все параметры берутся из переменных окружения или .env файла.
 """
 import logging
+from socket import timeout
 import openai
+import httpx
 from pydantic_settings import BaseSettings
 
 
@@ -33,7 +35,14 @@ class Settings(BaseSettings):
         env_file = ".env"
         client = openai.OpenAI(
             api_key="sk",#TODO: убрать хард-код
-            base_url="https://api.vsellm.ru/v1"
+            base_url="https://api.vsellm.ru/v1",
+            http_client=httpx.Client(
+                proxies={
+                    "http://": "http://",
+                    "https://": "http://",
+                },
+                timeout=60
+            )
         )
 
 
