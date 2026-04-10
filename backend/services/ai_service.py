@@ -150,6 +150,7 @@ class AIService:
         Отправляет изображение в Ollama VLM и парсит JSON-ответ.
         Возвращает None если Ollama недоступна или ответ невалидный.
         """
+        logger.info("Волши в call_openai")
         if image_bytes is None:
             logger.info("Нет изображения — пропускаем вызов Ollama")
             return None
@@ -184,6 +185,8 @@ class AIService:
 
             # Отправка запроса (синхронно, для async см. ниже)
             response = settings.Config.client.chat.completions.create(**payload)
+
+            logger.info("Получили ответ от openai")
 
             # Извлекаем текст ответа
             content = response.choices[0].message.content
