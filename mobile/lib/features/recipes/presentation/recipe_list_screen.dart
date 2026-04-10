@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -38,24 +39,24 @@ class RecipeListScreen extends ConsumerWidget {
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.restaurant_menu_rounded, size: 56, color: AppTheme.primary),
-            ),
+            ).animate().fadeIn(duration: 500.ms).scale(begin: const Offset(0.5, 0.5), end: const Offset(1, 1)),
             const SizedBox(height: 24),
             Text(
               'Пока нет блюд',
               style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w700, color: Theme.of(context).textTheme.bodyLarge?.color),
-            ),
+            ).animate().fadeIn(duration: 400.ms, delay: 150.ms),
             const SizedBox(height: 8),
             Text(
               'Сфотографируйте содержимое холодильника,\nи AI подберёт рецепты для вас',
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(fontSize: 14, color: Theme.of(context).textTheme.bodyMedium?.color, height: 1.5),
-            ),
+            ).animate().fadeIn(duration: 400.ms, delay: 250.ms),
             const SizedBox(height: 32),
             ElevatedButton.icon(
               onPressed: () => context.go('/scanner'),
               icon: const Icon(Icons.camera_alt_rounded),
               label: const Text('Сканировать холодильник'),
-            ),
+            ).animate().fadeIn(duration: 400.ms, delay: 350.ms).slideY(begin: 0.2, end: 0),
           ],
         ),
       ),
@@ -92,7 +93,8 @@ class RecipeListScreen extends ConsumerWidget {
                 final recipe = recipes[index];
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 16),
-                  child: _RecipeListCard(recipe: recipe, isDark: isDark),
+                  child: _RecipeListCard(recipe: recipe, isDark: isDark)
+                      .animate().fadeIn(duration: 400.ms, delay: Duration(milliseconds: 80 * index)).slideY(begin: 0.08, end: 0),
                 );
               },
               childCount: recipes.length,
