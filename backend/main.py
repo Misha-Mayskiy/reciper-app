@@ -2,6 +2,8 @@
 Главный модуль FastAPI-приложения Reciper.
 Настраивает CORS, роутеры и startup-события.
 """
+
+import os
 import logging
 import random
 import uuid
@@ -10,6 +12,7 @@ from datetime import date, timedelta
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from api.v1.routers import fridge, tasks, meals, users
 from infrastructure.database import SessionLocal
@@ -56,13 +59,16 @@ async def lifespan(application: FastAPI):
     with SessionLocal() as db:
         user_repo = UserRepository(db)
         if not user_repo.get_user("user_1"):
-            user_repo.create_user({
-                "name": "Дефолтный пользователь",
-                "daily_calories_target": 2200,
-                "target_protein": 120,
-                "target_fat": 70,
-                "target_carbs": 280,
-            }, user_id="user_1")
+            user_repo.create_user(
+                {
+                    "name": "Дефолтный пользователь",
+                    "daily_calories_target": 2200,
+                    "target_protein": 120,
+                    "target_fat": 70,
+                    "target_carbs": 280,
+                },
+                user_id="user_1",
+            )
             logger.info("✅ Создан дефолтный пользователь user_1")
         else:
             logger.info("ℹ️ Дефолтный пользователь user_1 уже существует")
@@ -81,6 +87,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+os.makedirs("media", exist_ok=True)
+app.mount("/media", StaticFiles(directory="media"), name="media")
 
 # ──────────── CORS Middleware ────────────
 app.add_middleware(

@@ -1,61 +1,91 @@
 """
 Интеграция с Unsplash API для получения фотографий блюд.
-Используется search_query, сгенерированный нейросетью.
+Бэкенд скачивает картинку и отдает локальный URL, чтобы обойти блокировки на клиенте.
 """
-import logging
 
+import logging
+import os
+import uuid
 import httpx
+
 from core.config import settings
 
 logger = logging.getLogger("reciper.unsplash")
 
-# Fallback-изображение, если API недоступен или ключ не указан
-DEFAULT_FOOD_IMAGE = (
+MEDIA_DIR = "media"
+os.makedirs(MEDIA_DIR, exist_ok=True)
+
+# Дефолтная картинка (если API не нашло)
+DEFAULT_FOOD_IMAGE_URL = (
     "https://images.unsplash.com/photo-1546069901-ba9599a7e63c"
     "?w=600&h=400&fit=crop&q=80"
 )
 
 
+async def _download_and_save_image(
+    client: httpx.AsyncClient, url: str, query: str
+) -> str:
+    """Скачивает картинку по URL и сохраняет в папку media."""
+    try:
+        response = await client.get(url, follow_redirects=True)
+        response.raise_for_status()
+
+        # Генерируем уникальное имя файла
+        filename = f"{uuid.uuid4().hex}.jpg"
+        filepath = os.path.join(MEDIA_DIR, filename)
+
+        # Сохраняем на диск
+        with open(filepath, "wb") as f:
+            f.write(response.content)
+
+        logger.info(f"Unsplash: Картинка для «{query}» успешно скачана ({filename})")
+
+        # Возвращаем URL нашего бэкенда
+        return f"{settings.APP_DOMAIN}/media/{filename}"
+
+    except Exception as e:
+        logger.error(f"Unsplash: Ошибка скачивания картинки для «{query}»: {e}")
+        return ""
+
+
 async def fetch_recipe_image(query: str) -> str:
     """
-    Выполняет запрос к Unsplash API для поиска картинки по запросу.
-
-    Args:
-        query: Поисковый запрос (например, "tomato cheese omelet").
-
-    Returns:
-        URL изображения из Unsplash или fallback-URL.
+    Выполняет поиск в Unsplash, скачивает результат и возвращает локальный URL.
     """
-    if not settings.UNSPLASH_ACCESS_KEY:
-        logger.warning("UNSPLASH_ACCESS_KEY не указан — используется fallback-изображение")
-        return DEFAULT_FOOD_IMAGE
+    image_url = DEFAULT_FOOD_IMAGE_URL
 
-    url = "https://api.unsplash.com/search/photos"
-    params = {
-        "query": f"{query} food dish",
-        "per_page": 1,
-        "orientation": "landscape",
-    }
-    headers = {
-        "Authorization": f"Client-ID {settings.UNSPLASH_ACCESS_KEY}"
-    }
+    # Если твой сервер в РФ и Unsplash заблокирован даже для бэкенда,
+    # раскомментируй proxy_mounts и добавь их в httpx.AsyncClient(mounts=proxies)
+    # proxies = {
+    #     "http://": httpx.HTTPTransport(proxy="http://ТВОЙ_ПРОКСИ"),
+    #     "https://": httpx.HTTPTransport(proxy="http://ТВОЙ_ПРОКСИ"),
+    # }
 
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url, params=params, headers=headers)
-            response.raise_for_status()
-            data = response.json()
-            if data.get("results"):
-                image_url = data["results"][0]["urls"]["regular"]
-                logger.info(f"Unsplash: найдено изображение для «{query}»")
-                return image_url
-            else:
-                logger.warning(f"Unsplash: нет результатов для «{query}»")
-    except httpx.TimeoutException:
-        logger.error(f"Unsplash: таймаут запроса для «{query}»")
-    except httpx.HTTPStatusError as e:
-        logger.error(f"Unsplash: HTTP ошибка {e.response.status_code} для «{query}»")
-    except Exception as e:
-        logger.error(f"Unsplash: неизвестная ошибка для «{query}»: {e}")
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        # 1. Пытаемся найти картинку через API
+        if settings.UNSPLASH_ACCESS_KEY:
+            api_url = "https://api.unsplash.com/search/photos"
+            params = {
+                "query": f"{query} food dish",
+                "per_page": 1,
+                "orientation": "landscape",
+            }
+            headers = {"Authorization": f"Client-ID {settings.UNSPLASH_ACCESS_KEY}"}
 
-    return DEFAULT_FOOD_IMAGE
+            try:
+                api_resp = await client.get(api_url, params=params, headers=headers)
+                api_resp.raise_for_status()
+                data = api_resp.json()
+                if data.get("results"):
+                    image_url = data["results"][0]["urls"]["regular"]
+            except Exception as e:
+                logger.error(f"Unsplash: Ошибка поиска API для «{query}»: {e}")
+
+        # 2. Скачиваем найденную (или дефолтную) картинку на наш сервер
+        local_backend_url = await _download_and_save_image(client, image_url, query)
+
+        if local_backend_url:
+            return local_backend_url
+
+        # 3. Если скачивание упало, возвращаем хотя бы оригинальный URL как последний шанс
+        return image_url

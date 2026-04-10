@@ -2,6 +2,7 @@
 AI-сервис: анализ изображений и генерация рецептов.
 Использует Ollama/llama.cpp (OpenAI-совместимый API) или mock-данные.
 """
+
 import json
 import logging
 from typing import Optional
@@ -59,45 +60,41 @@ class AIService:
     async def process_fridge_image(
         self, task_id: str, image_bytes: Optional[bytes] = None
     ) -> None:
-        """
-        Фоновая задача: анализ фото холодильника → генерация рецептов.
-
-        1. Пытается отправить изображение в Ollama (VLM)
-        2. Если Ollama недоступна — использует mock-данные
-        3. Получает изображения из Unsplash
-        4. Сохраняет рецепты в БД
-        5. Обновляет статус задачи в Redis
-        """
         try:
             self.task_service.set_task_status(task_id, "processing")
 
-            # Попытка обратиться к Ollama
-            if settings.Config.client:
+            ai_result = None
+
+            # 1. Попытка обратиться к основному API (Gemini/OpenAI)
+            if hasattr(settings, "client") and settings.client:
+                logger.info("Пробуем основное API (Gemini/OpenAI)...")
                 ai_result = await self._call_openai(image_bytes)
-            else:
+
+            # 2. Если основное API упало или не настроено — пробуем Ollama
+            if ai_result is None:
+                logger.warning("Основное API недоступно. Fallback -> Ollama")
                 ai_result = await self._call_ollama(image_bytes)
 
+            # 3. Если и Ollama недоступна/не справилась — используем mock-данные
             if ai_result is None:
-                logger.warning("Ollama недоступна — используем mock-данные")
+                logger.warning(
+                    "Ollama недоступна или вернула ошибку — используем mock-данные"
+                )
                 ai_result = self._get_mock_data()
 
             detected_ingredients = ai_result.get("ingredients", [])
             recipes_data = ai_result.get("recipes", [])
 
-            # Получаем изображения и сохраняем в БД
+            # --- Дальше твой оригинальный код сохранения в БД ---
             with SessionLocal() as db:
                 recipe_repo = RecipeRepository(db)
 
                 for recipe in recipes_data:
-                    # Unsplash изображение
                     search_query = recipe.pop("search_query", recipe["title"])
                     image_url = await fetch_recipe_image(search_query)
                     recipe["image_url"] = image_url
-
-                    # Извлекаем шаги
                     steps = recipe.pop("steps", [])
 
-                    # Сохраняем рецепт + шаги в БД
                     recipe_db_data = {
                         "title": recipe["title"],
                         "description": recipe["description"],
@@ -112,7 +109,6 @@ class AIService:
                         recipe_db_data, steps
                     )
 
-                    # Записываем ID и шаги в ответ клиенту
                     recipe["id"] = new_recipe.id
                     recipe["steps"] = [
                         {
@@ -125,7 +121,6 @@ class AIService:
                         for step in new_recipe.steps
                     ]
 
-            # Сохраняем результат
             result = {
                 "ingredients": detected_ingredients,
                 "recipes": recipes_data,
@@ -140,76 +135,47 @@ class AIService:
         except Exception as e:
             logger.error(f"❌ Task {task_id}: ошибка — {e}", exc_info=True)
             self.task_service.set_task_status(
-                task_id, "error", {"detail": str(e)}
-            )
+                task_id, "error", {"detail": str(e)})
 
-    async def _call_openai(
-        self, image_bytes: Optional[bytes] = None
-    ) -> Optional[dict]:
-        """
-        Отправляет изображение в Ollama VLM и парсит JSON-ответ.
-        Возвращает None если Ollama недоступна или ответ невалидный.
-        """
-        logger.info("Волши в call_openai")
+    async def _call_openai(self, image_bytes: Optional[bytes] = None) -> Optional[dict]:
+        logger.info("--- Попытка вызова VSELLM ---")
         if image_bytes is None:
-            logger.info("Нет изображения — пропускаем вызов Ollama")
             return None
         try:
-            # Подготовка изображения
             image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
-            # Формирование payload
             payload = {
-                # "model": "qwen/qwen3-vl-flash",
+                # Убедись, что это имя модели актуально для vsellm
                 "model": "google/gemini-3-flash-preview",
                 "messages": [
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {
                         "role": "user",
                         "content": [
-                            {
-                                "type": "text",
-                                "text": "Проанализируй фото содержимого холодильника и предложи рецепты.."
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{image_b64}"
-                                }
-                            }
+                            {"type": "text",
+                                "text": "Проанализируй фото и предложи рецепты."},
+                            {"type": "image_url", "image_url": {
+                                "url": f"data:image/jpeg;base64,{image_b64}"}}
                         ]
                     }
                 ],
-                "stream": False,
-                # "response_format": {"type": "json_object"}  # если нужен JSON response
             }
 
-            # Отправка запроса (синхронно, для async см. ниже)
-            response = settings.Config.client.chat.completions.create(**payload)
+            # Используем run_in_threadpool, так как клиент OpenAI синхронный
+            from fastapi.concurrency import run_in_threadpool
+            response = await run_in_threadpool(
+                lambda: settings.client.chat.completions.create(**payload)
+            )
 
-            logger.info("Получили ответ от openai")
-
-            # Извлекаем текст ответа
             content = response.choices[0].message.content
-
-            # Парсим JSON из ответа
             return self._parse_ai_response(content)
 
-        except httpx.ConnectError:
-            logger.warning(
-                f"Ollama недоступна по адресу {settings.OLLAMA_BASE_URL}"
-            )
-            return None
-        except httpx.TimeoutException:
-            logger.error("Ollama: таймаут запроса (120с)")
-            return None
         except Exception as e:
-            logger.error(f"Ollama: ошибка — {e}")
+            # ВОТ ТУТ МЫ УВИДИМ РЕАЛЬНУЮ ПРИЧИНУ
+            logger.error(f"❌ Ошибка VSELLM: {type(e).__name__}: {e}")
             return None
 
-    async def _call_ollama(
-        self, image_bytes: Optional[bytes] = None
-    ) -> Optional[dict]:
+    async def _call_ollama(self, image_bytes: Optional[bytes] = None) -> Optional[dict]:
         """
         Отправляет изображение в Ollama VLM и парсит JSON-ответ.
         Возвращает None если Ollama недоступна или ответ невалидный.
@@ -253,8 +219,7 @@ class AIService:
 
         except httpx.ConnectError:
             logger.warning(
-                f"Ollama недоступна по адресу {settings.OLLAMA_BASE_URL}"
-            )
+                f"Ollama недоступна по адресу {settings.OLLAMA_BASE_URL}")
             return None
         except httpx.TimeoutException:
             logger.error("Ollama: таймаут запроса (120с)")
@@ -293,7 +258,11 @@ class AIService:
         """Mock-данные для разработки без Ollama."""
         return {
             "ingredients": [
-                "помидоры", "сыр", "яйца", "лук", "зелень",
+                "помидоры",
+                "сыр",
+                "яйца",
+                "лук",
+                "зелень",
             ],
             "recipes": [
                 {

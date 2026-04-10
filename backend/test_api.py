@@ -6,8 +6,10 @@ BASE_URL = "http://localhost:8000"
 
 def test_fridge_scan():
     print("1. Testing fridge scan...")
-    # Фейковый файл загрузки
-    files = {'file': ('fridge.jpg', b'fake image data', 'image/jpeg')}
+    # Читаем реальный файл
+    with open("fridge.jpg", "rb") as f:
+        img_data = f.read()
+    files = {'file': ('fridge.jpg', img_data, 'image/jpeg')}
 
     response = requests.post(f"{BASE_URL}/api/v1/fridge/scan", files=files)
     assert response.status_code == 200, f"Error: {response.text}"
@@ -29,7 +31,7 @@ def test_polling(task_id):
         data = response.json()
         if data["status"] == "processing":
             print(f"   attempt {i+1}: still processing...")
-            time.sleep(2)
+            time.sleep(10)
         elif data["status"] == "done":
             print("   Success! Got done status.")
             print(f"   Ingredients: {data['result']['ingredients']}")
