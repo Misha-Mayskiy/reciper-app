@@ -3,6 +3,7 @@
 Все параметры берутся из переменных окружения или .env файла.
 """
 import logging
+import openai
 from pydantic_settings import BaseSettings
 
 
@@ -30,6 +31,10 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        client = openai.OpenAI(
+            api_key="sk",#TODO: убрать хард-код
+            base_url="https://api.vsellm.ru/v1"
+        )
 
 
 settings = Settings()
