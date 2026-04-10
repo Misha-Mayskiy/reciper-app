@@ -110,7 +110,7 @@ class AppTheme {
         bodySmall: baseTextTheme.bodySmall?.copyWith(color: textMuted),
         labelLarge: baseTextTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600, letterSpacing: 0.5),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: surfaceCard,
         elevation: isDark ? 0 : 2,
         shadowColor: isDark ? Colors.transparent : Colors.black.withOpacity(0.08),

@@ -6,6 +6,7 @@ import json
 import logging
 from typing import Optional
 
+import base64
 import httpx
 
 from core.config import settings
@@ -17,28 +18,28 @@ from services.task_service import TaskService
 logger = logging.getLogger("reciper.ai_service")
 
 # Промпт для Vision-модели
-SYSTEM_PROMPT = """You are a professional chef AI assistant. You analyze photos of fridge contents.
+SYSTEM_PROMPT = """Ты профессиональный шеф-повар ИИ-ассистент. Анализируешь фото содержимого холодильника.
 
-Given an image, you must:
-1. Identify all visible food ingredients
-2. Generate 3-5 recipe suggestions using those ingredients
+Получив изображение, ты должен:
+1. Определить все видимые продукты и ингредиенты
+2. Предложить 3-5 рецептов БЕЗ дополнительных покупок, используя ТОЛЬКО эти ингредиенты
 
-Respond ONLY with valid JSON in this exact format:
+Отвечай ТОЛЬКО валидным JSON в ЭТОМ точном формате:
 {
-  "ingredients": ["ingredient1", "ingredient2", ...],
+  "ingredients": ["ингредиент1", "ингредиент2"],
   "recipes": [
     {
-      "title": "Recipe Name",
-      "description": "Brief description",
-      "search_query": "search terms for food photo",
+      "title": "Название рецепта",
+      "description": "Краткое описание",
+      "search_query": "ключевые слова для поиска фото блюда",
       "prep_time_minutes": 15,
       "calories": 350,
       "protein": 20,
       "fat": 25,
       "carbs": 5,
       "steps": [
-        {"step_number": 1, "instruction": "Step description", "timer_seconds": 120},
-        {"step_number": 2, "instruction": "Step description", "timer_seconds": null}
+        {"step_number": 1, "instruction": "Описание шага", "timer_seconds": 120},
+        {"step_number": 2, "instruction": "Описание шага", "timer_seconds": null}
       ]
     }
   ]
@@ -71,7 +72,10 @@ class AIService:
             self.task_service.set_task_status(task_id, "processing")
 
             # Попытка обратиться к Ollama
-            ai_result = await self._call_ollama(image_bytes)
+            if settings.Config.client:
+                ai_result = await self._call_openai(image_bytes)
+            else:
+                ai_result = await self._call_ollama(image_bytes)
 
             if ai_result is None:
                 logger.warning("Ollama недоступна — используем mock-данные")
@@ -138,6 +142,70 @@ class AIService:
             self.task_service.set_task_status(
                 task_id, "error", {"detail": str(e)}
             )
+
+    async def _call_openai(
+        self, image_bytes: Optional[bytes] = None
+    ) -> Optional[dict]:
+        """
+        Отправляет изображение в Ollama VLM и парсит JSON-ответ.
+        Возвращает None если Ollama недоступна или ответ невалидный.
+        """
+        logger.info("Волши в call_openai")
+        if image_bytes is None:
+            logger.info("Нет изображения — пропускаем вызов Ollama")
+            return None
+        try:
+            # Подготовка изображения
+            image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+
+            # Формирование payload
+            payload = {
+                # "model": "qwen/qwen3-vl-flash",
+                "model": "google/gemini-3-flash-preview",
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "Проанализируй фото содержимого холодильника и предложи рецепты.."
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{image_b64}"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                "stream": False,
+                # "response_format": {"type": "json_object"}  # если нужен JSON response
+            }
+
+            # Отправка запроса (синхронно, для async см. ниже)
+            response = settings.Config.client.chat.completions.create(**payload)
+
+            logger.info("Получили ответ от openai")
+
+            # Извлекаем текст ответа
+            content = response.choices[0].message.content
+
+            # Парсим JSON из ответа
+            return self._parse_ai_response(content)
+
+        except httpx.ConnectError:
+            logger.warning(
+                f"Ollama недоступна по адресу {settings.OLLAMA_BASE_URL}"
+            )
+            return None
+        except httpx.TimeoutException:
+            logger.error("Ollama: таймаут запроса (120с)")
+            return None
+        except Exception as e:
+            logger.error(f"Ollama: ошибка — {e}")
+            return None
 
     async def _call_ollama(
         self, image_bytes: Optional[bytes] = None
