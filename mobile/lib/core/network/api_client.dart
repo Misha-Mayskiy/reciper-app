@@ -9,7 +9,7 @@ part 'api_client.g.dart';
 Dio apiClient(ApiClientRef ref) {
   // Мы используем localhost (127.0.0.1) вместе с технологией ADB Reverse Tunneling.
   // Это полностью обходит все блокировки Windows Firewall.
-  final String baseUrl = 'http://127.0.0.1:8000/api/v1';
+  final String baseUrl = 'http://qwen3vl.ddns.net:8000/api/v1';
 
   final dio = Dio(BaseOptions(
     baseUrl: baseUrl,
