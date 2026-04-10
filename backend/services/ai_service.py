@@ -160,7 +160,8 @@ class AIService:
 
             # Формирование payload
             payload = {
-                "model": "qwen/qwen3-vl-flash",  # или другая модель из вашего API
+                # "model": "qwen/qwen3-vl-flash",
+                "model": "google/gemini-3-flash-preview",
                 "messages": [
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {

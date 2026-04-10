@@ -4,7 +4,7 @@
 """
 import logging
 from socket import timeout
-import openai
+from openai import OpenAI
 import httpx
 from pydantic_settings import BaseSettings
 
@@ -33,18 +33,18 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
-        client = openai.OpenAI(
-            api_key="sk",#TODO: убрать хард-код
+        # proxy_url = "http://"
+        client = OpenAI(
+            api_key="sk-",  # TODO: убрать хард‑код
             base_url="https://api.vsellm.ru/v1",
-            http_client=httpx.Client(
-                proxies={
-                    "http://": "http://",
-                    "https://": "http://",
-                },
-                timeout=60
-            )
+            # http_client=httpx.Client(
+            #     mounts={
+            #         "http://": httpx.HTTPTransport(proxy=proxy_url),
+            #         "https://": httpx.HTTPTransport(proxy=proxy_url),
+            #     },
+            #     timeout=60,
+            # ),
         )
-
 
 settings = Settings()
 
